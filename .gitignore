@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+.env
+.env.local
+.env*.local
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+backups/
+logs/
+*.log
+private-exports/
+credentials/
+session-secrets/
+tsconfig.tsbuildinfo
