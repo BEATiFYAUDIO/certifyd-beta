@@ -22,6 +22,7 @@ export async function publishPublicSite(contactEmail = publicContactEmail()): Pr
   await fs.mkdir(staging, { recursive: true });
   await fs.writeFile(path.join(staging, 'index.html'), renderPublicHome());
   await fs.writeFile(path.join(staging, 'CNAME'), 'beta.certifyd.me\n');
+  await copyPublicAsset('certifyd-logo.svg', staging);
   await fs.mkdir(path.join(staging, 'invite'), { recursive: true });
   for (const invite of invites) {
     const inviteDir = path.join(staging, 'invite', invite.code);
@@ -78,6 +79,13 @@ export function publicContactEmail() {
   const contact = process.env.BETA_CONTACT_EMAIL || process.env.ADMIN_EMAIL;
   if (!contact) throw new Error('BETA_CONTACT_EMAIL or ADMIN_EMAIL is required to publish public invite pages.');
   return contact;
+}
+
+
+async function copyPublicAsset(fileName: string, outputDir: string) {
+  const source = path.join(process.cwd(), 'public', fileName);
+  const destination = path.join(outputDir, fileName);
+  await fs.copyFile(source, destination);
 }
 
 async function hashDirectory(directory: string) {

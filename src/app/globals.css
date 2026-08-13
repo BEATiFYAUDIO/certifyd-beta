@@ -5,7 +5,9 @@ a { color:inherit; }
 .container { width:min(1440px, calc(100vw - 48px)); margin:0 auto; }
 .header { border-bottom:1px solid var(--line); background:rgba(5,16,25,.92); position:sticky; top:0; z-index:5; }
 .header-inner { display:flex; align-items:center; justify-content:space-between; gap:24px; min-height:72px; }
-.brand { font-size:22px; font-weight:900; letter-spacing:.02em; text-decoration:none; }
+.brand { display:inline-flex; align-items:center; gap:12px; font-size:18px; font-weight:900; letter-spacing:.02em; text-decoration:none; }
+.brand img { height:38px; width:auto; display:block; }
+.brand span { color:var(--orange); text-transform:uppercase; font-size:12px; letter-spacing:.18em; }
 .nav { display:flex; gap:16px; flex-wrap:wrap; align-items:center; }
 .nav a, .nav button, .button { border:1px solid var(--line); border-radius:999px; background:#132535; color:var(--text); padding:10px 14px; text-decoration:none; font-weight:800; cursor:pointer; }
 .button.primary, button.primary { background:linear-gradient(135deg,#ffd56a,var(--orange)); color:#090909; border:0; }
