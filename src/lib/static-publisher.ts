@@ -23,6 +23,7 @@ export async function publishPublicSite(contactEmail = publicContactEmail()): Pr
   await fs.writeFile(path.join(staging, 'index.html'), renderPublicHome());
   await fs.writeFile(path.join(staging, 'CNAME'), 'beta.certifyd.me\n');
   await copyPublicAsset('certifyd-logo.svg', staging);
+  await copyPublicAsset('favicon.svg', staging);
   await fs.mkdir(path.join(staging, 'invite'), { recursive: true });
   for (const invite of invites) {
     const inviteDir = path.join(staging, 'invite', invite.code);

@@ -92,6 +92,7 @@ function renderPage(title: string, body: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(title)}</title>
   <meta name="description" content="Private Certifyd technical beta invitation." />
+  <link rel="icon" href="/favicon.svg" />
   <style>${publicCss()}</style>
 </head>
 <body>
