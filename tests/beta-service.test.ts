@@ -281,6 +281,9 @@ test('static publishing omits unpublished invites, removes unpublished pages, an
   const inviteHtml = await fs.readFile(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'index.html'), 'utf8');
   assert.match(inviteHtml, /Accept Invitation/);
   assert.match(inviteHtml, /Decline/);
+  assert.match(inviteHtml, /href="mailto:/);
+  assert.equal(inviteHtml.includes('href="#"'), false);
+  assert.equal(inviteHtml.includes('js-response'), false);
   assert.equal(inviteHtml.includes('public-demo@example.test'), false);
   assert.equal(inviteHtml.includes(participant.id), false);
   await publisher.scanPublicOutput();
