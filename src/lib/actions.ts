@@ -1,10 +1,10 @@
 'use server';
 
-import { ParticipantStatus, MilestoneStatus } from '@prisma/client';
+import { ParticipantMissionStatus, ParticipantStatus, MilestoneStatus } from '@prisma/client';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getSession, requireAdmin, verifyAdminPassword } from './auth';
-import { acceptInvite, addFounderNote, addMissionMilestone, assignMission, createMission, createParticipant, generateInvite, publishInvite, regenerateInvite, revokeInvite, unpublishInvite, updateParticipantStatus, updateProgress } from './beta-service';
+import { acceptInvite, addFounderNote, addMissionMilestone, advanceToNextMission, assignMission, createMission, createParticipant, ensurePracticeParticipant, generateInvite, publishInvite, regenerateInvite, revokeInvite, unpublishInvite, updateParticipantMissionStatus, updateParticipantStatus, updateProgress } from './beta-service';
 import { getEnv } from './env';
 import { rateLimit } from './rate-limit';
 import { publishPublicSite } from './static-publisher';
@@ -46,12 +46,28 @@ export async function statusAction(formData: FormData) {
 export async function assignMissionAction(formData: FormData) {
   const admin = await requireAdmin();
   await assignMission(String(formData.get('participantId')), String(formData.get('missionId')), admin.email);
+  revalidatePath('/admin');
   revalidatePath(`/admin/participants/${formData.get('participantId')}`);
+}
+
+export async function participantMissionStatusAction(formData: FormData) {
+  const admin = await requireAdmin();
+  await updateParticipantMissionStatus(String(formData.get('participantMissionId')), String(formData.get('status')) as ParticipantMissionStatus, admin.email);
+  revalidatePath('/admin');
+  revalidatePath(`/admin/participants/${formData.get('participantId')}`);
+}
+
+export async function advanceMissionAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const participantId = String(formData.get('participantId'));
+  await advanceToNextMission(participantId, admin.email, String(formData.get('allowIncomplete') || '') === '1');
+  revalidatePath('/admin');
+  revalidatePath(`/admin/participants/${participantId}`);
 }
 
 export async function noteAction(formData: FormData) {
   const admin = await requireAdmin();
-  await addFounderNote(String(formData.get('participantId')), { body: String(formData.get('body') || '') }, admin.email);
+  await addFounderNote(String(formData.get('participantId')), { body: String(formData.get('body') || ''), participantMissionId: String(formData.get('participantMissionId') || '') }, admin.email);
   revalidatePath(`/admin/participants/${formData.get('participantId')}`);
 }
 
@@ -82,10 +98,9 @@ export async function revokeInviteAction(formData: FormData) {
 
 export async function regenerateInviteAction(formData: FormData) {
   const admin = await requireAdmin();
-  await regenerateInvite(String(formData.get('participantId')), admin.email);
+  await regenerateInvite(String(formData.get('participantId')), admin.email, String(formData.get('participantMissionId') || '') || null);
   revalidatePath(`/admin/participants/${formData.get('participantId')}`);
 }
-
 
 export async function publishInviteAction(formData: FormData) {
   const admin = await requireAdmin();
@@ -109,6 +124,14 @@ export async function publishPublicSiteAction() {
   revalidatePath('/admin/invites');
 }
 
+export async function ensurePracticeParticipantAction() {
+  const admin = await requireAdmin();
+  const result = await ensurePracticeParticipant(admin.email);
+  revalidatePath('/admin');
+  revalidatePath('/admin/participants');
+  redirect(`/admin/participants/${result.participant.id}?invite=${encodeURIComponent(`${getEnv().NEXT_PUBLIC_APP_URL.replace(/\/$/, '')}/invite/${result.code}/`)}`);
+}
+
 export async function acceptInviteAction(formData: FormData) {
   const code = String(formData.get('code') || '');
   const acceptLimit = rateLimit(`accept:${code}`, { limit: 10, windowMs: 10 * 60 * 1000 });
@@ -123,5 +146,5 @@ export async function downstreamAction(formData: FormData) {
   const invite = await generateInvite(participant.id, admin.email);
   const base = getEnv().NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
   revalidatePath(`/admin/participants/${formData.get('parentParticipantId')}`);
-  redirect(`/admin/participants/${participant.id}?invite=${encodeURIComponent(`${base}/invite/${invite.code}`)}`);
+  redirect(`/admin/participants/${participant.id}?invite=${encodeURIComponent(`${base}/invite/${invite.code}/`)}`);
 }

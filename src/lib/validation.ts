@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { InviteStatus, MilestoneStatus, ParticipantStatus } from '@prisma/client';
+import { InviteStatus, MilestoneStatus, ParticipantMissionStatus, ParticipantStatus } from '@prisma/client';
 
 export const idSchema = z.string().trim().min(8).max(80).regex(/^[a-zA-Z0-9_-]+$/);
 export const inviteCodeSchema = z.string().trim().min(32).max(128).regex(/^[A-Za-z0-9_-]+$/);
 export const participantStatusSchema = z.nativeEnum(ParticipantStatus);
 export const milestoneStatusSchema = z.nativeEnum(MilestoneStatus);
+export const missionAssignmentStatusSchema = z.nativeEnum(ParticipantMissionStatus);
 export const inviteStatusSchema = z.nativeEnum(InviteStatus);
 
 export const participantSchema = z.object({
@@ -22,6 +23,7 @@ export const participantSchema = z.object({
 export const missionSchema = z.object({
   name: z.string().trim().min(1).max(120),
   slug: z.string().trim().min(1).max(120).regex(/^[a-z0-9-]+$/),
+  sequence: z.coerce.number().int().min(0).max(999).default(0),
   shortDescription: z.string().trim().min(1).max(280),
   inviteCopy: z.string().trim().min(1).max(1600),
   active: z.coerce.boolean().default(true),
@@ -32,5 +34,5 @@ export const milestoneSchema = z.object({
   description: z.string().trim().max(500).optional().default(''),
 });
 
-export const noteSchema = z.object({ body: z.string().trim().min(1).max(4000) });
+export const noteSchema = z.object({ body: z.string().trim().min(1).max(4000), participantMissionId: idSchema.or(z.literal('')).optional().nullable() });
 export const progressNoteSchema = z.string().trim().max(1000);

@@ -1,3 +1,5 @@
+import { loadLocalEnv } from './load-local-env';
+loadLocalEnv();
 import { scanPublicOutput, PUBLIC_OUTPUT_DIR } from '../src/lib/static-publisher';
 
 const result = await scanPublicOutput(PUBLIC_OUTPUT_DIR);

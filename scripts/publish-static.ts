@@ -1,3 +1,5 @@
+import { loadLocalEnv } from './load-local-env';
+loadLocalEnv();
 import { publishPublicSite } from '../src/lib/static-publisher';
 import { prisma } from '../src/lib/db';
 

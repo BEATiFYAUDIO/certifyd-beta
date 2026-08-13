@@ -3,7 +3,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { InviteStatus } from '@prisma/client';
 import { prisma } from './db';
-import { buildStaticInviteDto, renderPublicHome, renderPublicInvite, type StaticInviteDto } from './public-invite';
+import { buildStaticInviteDto, type StaticInviteDto } from './public-invite';
+import { renderPublicHome, renderPublicInvite } from './public-invite-renderer';
 
 export const PUBLIC_OUTPUT_DIR = path.join(process.cwd(), 'generated-public');
 
@@ -45,7 +46,7 @@ export async function publishPublicSite(contactEmail = publicContactEmail()): Pr
 export async function getPublishedInviteDtos(contactEmail = publicContactEmail()): Promise<StaticInviteDto[]> {
   const invites = await prisma.invite.findMany({
     where: { published: true, status: { notIn: [InviteStatus.REVOKED, InviteStatus.EXPIRED] } },
-    include: { participant: { include: { mission: true } } },
+    include: { participant: true, participantMission: { include: { mission: true } } },
     orderBy: { createdAt: 'desc' },
   });
   return invites.map((invite) => buildStaticInviteDto(invite, contactEmail)).filter((invite): invite is StaticInviteDto => Boolean(invite));
