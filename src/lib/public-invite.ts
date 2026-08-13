@@ -53,11 +53,12 @@ export function renderPublicInvite(invite: StaticInviteDto): string {
         <h2>${escapeHtml(invite.missionTitle)}</h2>
         <p class="muted">${escapeHtml(invite.missionDescription)}</p>
       </div>
-      <div class="actions">
-        <a class="button primary" href="${escapeAttribute(links.accept)}">Accept Invitation</a>
-        <a class="button secondary" href="${escapeAttribute(links.decline)}">Decline</a>
+      <div class="actions" data-contact-user="${escapeAttribute(contactUser(invite.contactEmail))}" data-contact-domain="${escapeAttribute(contactDomain(invite.contactEmail))}" data-invite-code="${escapeAttribute(invite.code)}" data-invite-name="${escapeAttribute(invite.displayName)}" data-mission-name="${escapeAttribute(invite.missionTitle)}">
+        <a class="button primary js-response" data-response="accept" href="#">Accept Invitation</a>
+        <a class="button secondary js-response" data-response="decline" href="#">Decline</a>
       </div>
     </section>
+    <script>${responseScript()}</script>
   `);
 }
 
@@ -78,6 +79,14 @@ function renderPage(title: string, body: string): string {
 </html>`;
 }
 
+function contactUser(email: string): string {
+  return email.split('@')[0] || '';
+}
+
+function contactDomain(email: string): string {
+  return email.split('@').slice(1).join('@');
+}
+
 function mailto(to: string, subject: string, body: string): string {
   return `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
@@ -88,6 +97,10 @@ function escapeHtml(value: string): string {
 
 function escapeAttribute(value: string): string {
   return escapeHtml(value);
+}
+
+function responseScript(): string {
+  return `(function(){var actions=document.querySelector('.actions[data-contact-user]');if(!actions)return;var to=(actions.dataset.contactUser||'')+'@'+(actions.dataset.contactDomain||'');var code=actions.dataset.inviteCode||'';var name=actions.dataset.inviteName||'';var mission=actions.dataset.missionName||'';function href(kind){var accept=kind==='accept';var subject='Certifyd Beta — '+(accept?'Accept':'Decline')+' — '+name+' — '+code;var body=accept?"I'd like to accept my invitation to participate in the Certifyd technical beta.\n\nInvite: "+code+"\nMission: "+mission:"Thanks for the invitation. I'm going to pass on the Certifyd technical beta for now.\n\nInvite: "+code;return 'mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body)}document.querySelectorAll('.js-response').forEach(function(link){link.href=href(link.dataset.response);});})();`;
 }
 
 function publicCss(): string {
