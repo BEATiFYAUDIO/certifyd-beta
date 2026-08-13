@@ -39,13 +39,14 @@ ADMIN_EMAIL="you@example.com"
 ADMIN_PASSWORD="long-unique-password-or-bcrypt-hash"
 SESSION_PASSWORD="at-least-32-random-characters"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+PUBLIC_SITE_ORIGIN="https://beta.certifyd.me"
 BETA_CONTACT_EMAIL="beta-contact@example.com"
 NODE_ENV="development"
 ```
 
 `BETA_CONTACT_EMAIL` is used for the static public Accept/Decline `mailto:` links. If omitted, the app falls back to `ADMIN_EMAIL` locally.
 
-Production startup rejects known development/default passwords and requires `NEXT_PUBLIC_APP_URL` to use HTTPS.
+`NEXT_PUBLIC_APP_URL` is the private local admin/preview origin. `PUBLIC_SITE_ORIGIN` is the published GitHub Pages origin used for copied public invite URLs. Production startup rejects known development/default passwords and requires both URL origins to use HTTPS.
 
 ## Database
 

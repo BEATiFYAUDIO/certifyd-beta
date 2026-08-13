@@ -14,6 +14,7 @@ const envSchema = z.object({
   ADMIN_PASSWORD: z.string().min(12),
   SESSION_PASSWORD: z.string().min(32),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
+  PUBLIC_SITE_ORIGIN: z.string().url().default('https://beta.certifyd.me'),
   NODE_ENV: z.string().default('development'),
 }).superRefine((env, ctx) => {
   if (env.NODE_ENV !== 'production') return;
@@ -25,6 +26,9 @@ const envSchema = z.object({
   if (!env.NEXT_PUBLIC_APP_URL.startsWith('https://')) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['NEXT_PUBLIC_APP_URL'], message: 'NEXT_PUBLIC_APP_URL must use https:// in production' });
   }
+  if (!env.PUBLIC_SITE_ORIGIN.startsWith('https://')) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['PUBLIC_SITE_ORIGIN'], message: 'PUBLIC_SITE_ORIGIN must use https:// in production' });
+  }
 });
 
 export function getEnv() {
@@ -34,6 +38,7 @@ export function getEnv() {
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
     SESSION_PASSWORD: process.env.SESSION_PASSWORD,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || 'http://localhost:3000',
+    PUBLIC_SITE_ORIGIN: process.env.PUBLIC_SITE_ORIGIN || 'https://beta.certifyd.me',
     NODE_ENV: process.env.NODE_ENV || 'development',
   });
 }

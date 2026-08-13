@@ -10,6 +10,7 @@ process.env.ADMIN_EMAIL = 'admin@example.test';
 process.env.ADMIN_PASSWORD = 'very-long-local-password';
 process.env.SESSION_PASSWORD = '0123456789abcdef0123456789abcdef';
 process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
+process.env.PUBLIC_SITE_ORIGIN = 'https://beta.certifyd.me';
 
 execFileSync('npx', ['prisma', 'generate'], { cwd: process.cwd(), stdio: 'ignore', env: process.env });
 execFileSync('npx', ['prisma', 'migrate', 'deploy'], { cwd: process.cwd(), stdio: 'ignore', env: process.env });
@@ -59,6 +60,31 @@ test('invite tokens are URL-safe, high entropy and unique', async () => {
     assert.equal(seen.has(code), false);
     seen.add(code);
   }
+});
+
+
+test('invite URL helpers separate local preview from published public URL', async () => {
+  const { localPreviewInviteUrl, publicInviteUrl } = await import('../src/lib/urls');
+  const code = 'test-public-code';
+  const headers = new Map<string, string>([['host', 'localhost:3001']]);
+  const localUrl = localPreviewInviteUrl(code, { get: (name: string) => headers.get(name) || null });
+  const publicUrl = publicInviteUrl(code);
+  assert.equal(localUrl, 'http://localhost:3001/invite/test-public-code/');
+  assert.equal(publicUrl, 'https://beta.certifyd.me/invite/test-public-code/');
+  assert.equal(publicUrl.includes('localhost'), false);
+  assert.notEqual(localUrl, publicUrl);
+});
+
+test('copy public URL control receives the configured public URL', async () => {
+  const React = await import('react');
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { CopyButton } = await import('../src/components/CopyButton');
+  const { publicInviteUrl } = await import('../src/lib/urls');
+  const publicUrl = publicInviteUrl('copy-code');
+  const html = renderToStaticMarkup(React.createElement(CopyButton, { value: publicUrl, label: 'Copy Public URL' }));
+  assert.match(html, /Copy Public URL/);
+  assert.match(html, /https:\/\/beta\.certifyd\.me\/invite\/copy-code\//);
+  assert.equal(html.includes('localhost'), false);
 });
 
 test('participant can advance through missions without overwriting completed history', async () => {
@@ -238,7 +264,10 @@ test('static publishing omits unpublished invites, removes unpublished pages, an
   const mission = await missionFixture('static-publish');
   const participant = await service.createParticipant({ name: 'Public Demo', email: 'public-demo@example.test', missionId: mission.id });
   const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id } });
+  const { publicInviteUrl } = await import('../src/lib/urls');
   const { invite } = await service.generateInvite(participant.id, 'test', assignment.id);
+  assert.equal(publicInviteUrl(invite.code).startsWith('https://beta.certifyd.me/invite/'), true);
+  assert.equal(publicInviteUrl(invite.code).includes('localhost'), false);
 
   let result = await publisher.publishPublicSite();
   assert.equal(result.changed, true);
@@ -264,6 +293,27 @@ test('static publishing omits unpublished invites, removes unpublished pages, an
   result = await publisher.publishPublicSite();
   assert.equal(result.changed, true);
   await assert.rejects(() => fs.stat(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'index.html')));
+});
+
+
+test('generated public deploy commits only generated-public when static output changed', async () => {
+  const { commitAndPushPublicOutput } = await import('../src/lib/git-publisher');
+  const calls: string[][] = [];
+  const runner = async (args: string[]) => {
+    calls.push(args);
+    if (args[0] === 'status') return { stdout: ' M generated-public/index.html\n', stderr: '' };
+    if (args[0] === 'diff') return { stdout: 'generated-public/index.html\n', stderr: '' };
+    return { stdout: '', stderr: '' };
+  };
+  const result = await commitAndPushPublicOutput('publish beta invite page', runner);
+  assert.equal(result.changed, true);
+  assert.deepEqual(calls, [
+    ['status', '--short', '--', 'generated-public'],
+    ['add', '--', 'generated-public'],
+    ['diff', '--cached', '--name-only', '--', 'generated-public'],
+    ['commit', '-m', 'publish beta invite page', '--', 'generated-public'],
+    ['push'],
+  ]);
 });
 
 test('journey funnel derives completed stage counts', async () => {

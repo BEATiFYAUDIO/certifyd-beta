@@ -5,9 +5,9 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getSession, requireAdmin, verifyAdminPassword } from './auth';
 import { acceptInvite, addFounderNote, addMissionMilestone, advanceToNextMission, assignMission, createMission, createParticipant, ensurePracticeParticipant, generateInvite, publishInvite, regenerateInvite, revokeInvite, unpublishInvite, updateParticipantMissionStatus, updateParticipantStatus, updateProgress } from './beta-service';
-import { getEnv } from './env';
 import { rateLimit } from './rate-limit';
-import { publishPublicSite } from './static-publisher';
+import { publishAndDeployPublicSite } from './git-publisher';
+import { publicInviteUrl } from './urls';
 
 function entries(formData: FormData) { return Object.fromEntries(formData.entries()); }
 
@@ -106,7 +106,7 @@ export async function publishInviteAction(formData: FormData) {
   const admin = await requireAdmin();
   const participantId = String(formData.get('participantId'));
   await publishInvite(String(formData.get('inviteId')), admin.email);
-  await publishPublicSite();
+  await publishAndDeployPublicSite('publish beta invite page');
   revalidatePath(`/admin/participants/${participantId}`);
 }
 
@@ -114,13 +114,13 @@ export async function unpublishInviteAction(formData: FormData) {
   const admin = await requireAdmin();
   const participantId = String(formData.get('participantId'));
   await unpublishInvite(String(formData.get('inviteId')), admin.email);
-  await publishPublicSite();
+  await publishAndDeployPublicSite('unpublish beta invite page');
   revalidatePath(`/admin/participants/${participantId}`);
 }
 
 export async function publishPublicSiteAction() {
   await requireAdmin();
-  await publishPublicSite();
+  await publishAndDeployPublicSite('publish beta public site');
   revalidatePath('/admin/invites');
 }
 
@@ -129,7 +129,7 @@ export async function ensurePracticeParticipantAction() {
   const result = await ensurePracticeParticipant(admin.email);
   revalidatePath('/admin');
   revalidatePath('/admin/participants');
-  redirect(`/admin/participants/${result.participant.id}?invite=${encodeURIComponent(`${getEnv().NEXT_PUBLIC_APP_URL.replace(/\/$/, '')}/invite/${result.code}/`)}`);
+  redirect(`/admin/participants/${result.participant.id}?invite=${encodeURIComponent(publicInviteUrl(result.code))}`);
 }
 
 export async function acceptInviteAction(formData: FormData) {
@@ -144,7 +144,6 @@ export async function downstreamAction(formData: FormData) {
   const admin = await requireAdmin();
   const participant = await createParticipant(entries(formData), admin.email);
   const invite = await generateInvite(participant.id, admin.email);
-  const base = getEnv().NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
   revalidatePath(`/admin/participants/${formData.get('parentParticipantId')}`);
-  redirect(`/admin/participants/${participant.id}?invite=${encodeURIComponent(`${base}/invite/${invite.code}/`)}`);
+  redirect(`/admin/participants/${participant.id}?invite=${encodeURIComponent(publicInviteUrl(invite.code))}`);
 }
