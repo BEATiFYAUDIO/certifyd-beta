@@ -12,6 +12,8 @@ process.env.SESSION_PASSWORD = '0123456789abcdef0123456789abcdef';
 process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
 process.env.PUBLIC_SITE_ORIGIN = 'https://beta.certifyd.me';
 process.env.CERTIFYD_CORE_REPOSITORY_URL = 'https://github.com/BEATiFYAUDIO/contentbox';
+process.env.CODEX_URL = 'https://github.com/openai/codex';
+process.env.CLAUDE_CODE_URL = 'https://docs.anthropic.com/en/docs/claude-code/overview';
 
 execFileSync('npx', ['prisma', 'generate'], { cwd: process.cwd(), stdio: 'ignore', env: process.env });
 execFileSync('npx', ['prisma', 'migrate', 'deploy'], { cwd: process.cwd(), stdio: 'ignore', env: process.env });
@@ -88,6 +90,37 @@ test('copy public URL control receives the configured public URL', async () => {
   assert.match(html, /Copy Public URL/);
   assert.match(html, /https:\/\/beta\.certifyd\.me\/invite\/copy-code\//);
   assert.equal(html.includes('localhost'), false);
+});
+
+test('canonical journey has exactly 8 active stages and preserves migrated install history', async () => {
+  await resetDb();
+  const oldInstall = await service.createMission({ name: '01 — Install Certifyd Core', slug: 'install-certifyd-core', sequence: 1, shortDescription: 'Old install stage.', inviteCopy: 'Old invite.', active: true });
+  const oldMilestone = await service.addMissionMilestone(oldInstall.id, { title: 'Repository cloned' });
+  await service.createMission({ name: 'Run your own creator network', slug: 'run-your-own-creator-network', sequence: 0, shortDescription: 'Legacy duplicate.', inviteCopy: 'Legacy.', active: true });
+  const participant = await service.createParticipant({ name: 'Migration Tester', email: 'migration@example.test', missionId: oldInstall.id });
+  const oldAssignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id, missionId: oldInstall.id } });
+  const progress = await prisma.participantMissionProgress.findFirstOrThrow({ where: { participantMissionId: oldAssignment.id, milestoneId: oldMilestone.id } });
+  await service.updateProgress(progress.id, MilestoneStatus.COMPLETE, 'Already cloned.');
+
+  await service.ensureCanonicalJourney('test');
+  const activeMissions = await prisma.mission.findMany({ where: { active: true }, orderBy: { sequence: 'asc' } });
+  assert.deepEqual(activeMissions.map((mission) => mission.name), [
+    '01 — Get Ready to Run Certifyd Core',
+    '02 — Install Certifyd Core',
+    '03 — Set Up Your Core',
+    '04 — Connect Your Core to the Web',
+    '05 — Publish Your First Work',
+    '06 — Test Commerce',
+    '07 — Collaborate',
+    '08 — Run Your Own Network',
+  ]);
+  assert.deepEqual(activeMissions.map((mission) => mission.sequence), [1, 2, 3, 4, 5, 6, 7, 8]);
+  const legacy = await prisma.mission.findUniqueOrThrow({ where: { slug: 'run-your-own-creator-network' } });
+  assert.equal(legacy.active, false);
+  const migrated = await prisma.participantMission.findUniqueOrThrow({ where: { id: oldAssignment.id }, include: { mission: true, progress: true } });
+  assert.equal(migrated.mission.name, '02 — Install Certifyd Core');
+  assert.equal(migrated.sequence, 2);
+  assert.equal(migrated.progress.some((row) => row.status === MilestoneStatus.COMPLETE), true);
 });
 
 test('participant can advance through missions without overwriting completed history', async () => {
@@ -257,7 +290,46 @@ test('static public invite DTO contains only allowlisted fields and mission-spec
 });
 
 
-test('published Mission 01 invite generates safe static mission start page and AI prompt', async () => {
+test('published Mission 01 invite generates readiness start page without install instructions', async () => {
+  await resetDb();
+  await service.ensureCanonicalJourney('test');
+  process.env.BETA_CONTACT_EMAIL = 'certifydcreator@gmail.com';
+  const { buildStaticMissionStartDto } = await import('../src/lib/public-invite');
+  const { renderMissionStart } = await import('../src/lib/public-invite-renderer');
+  const mission = await prisma.mission.findUniqueOrThrow({ where: { slug: 'get-ready-to-run-certifyd-core' } });
+  const participant = await service.createParticipant({ name: 'Ready Demo', email: 'ready-private@example.test', missionId: mission.id, aiAgent: 'Codex' });
+  const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id } });
+  await service.addFounderNote(participant.id, { body: 'Founder note must never publish.', participantMissionId: assignment.id });
+  const { invite } = await service.generateInvite(participant.id, 'test', assignment.id);
+  await service.publishInvite(invite.id);
+  const source = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: true } } } });
+  const start = buildStaticMissionStartDto(source, 'certifydcreator@gmail.com');
+  assert.ok(start);
+  assert.equal(start.missionEyebrow, 'MISSION 01');
+  assert.equal(start.startHeading, 'Get Ready to Run Certifyd Core');
+  assert.equal(start.aiPrompt, '');
+  assert.equal(start.choices.length, 4);
+  const html = renderMissionStart(start);
+  assert.match(html, /This is a technical beta/);
+  assert.match(html, /I use ChatGPT/);
+  assert.match(html, /Get Codex/);
+  assert.match(html, /https:\/\/github\.com\/openai\/codex/);
+  assert.match(html, /I use Claude/);
+  assert.match(html, /Get Claude Code/);
+  assert.match(html, /docs\.anthropic\.com\/en\/docs\/claude-code\/overview/);
+  assert.match(html, /I already use another coding agent/);
+  assert.match(html, /comfortable with the command line/);
+  assert.match(html, /AI is optional/);
+  assert.match(html, /operating your own infrastructure/);
+  assert.match(html, /You're ready when/);
+  assert.equal(html.includes('Clone Certifyd Core'), false);
+  assert.equal(html.includes('Repository cloned'), false);
+  assert.equal(html.includes('ready-private@example.test'), false);
+  assert.equal(html.includes('Founder note'), false);
+  assert.equal(html.includes(participant.id), false);
+});
+
+test('published Mission 02 invite generates safe install start page and AI prompt', async () => {
   await resetDb();
   await service.ensureCanonicalJourney('test');
   process.env.BETA_CONTACT_EMAIL = 'certifydcreator@gmail.com';
@@ -272,7 +344,7 @@ test('published Mission 01 invite generates safe static mission start page and A
   const source = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: true } } } });
   const start = buildStaticMissionStartDto(source, 'certifydcreator@gmail.com');
   assert.ok(start);
-  assert.equal(start.missionEyebrow, 'MISSION 01');
+  assert.equal(start.missionEyebrow, 'MISSION 02');
   assert.equal(start.startHeading, 'Install Certifyd Core');
   assert.match(start.aiPrompt, /technical beta/);
   assert.match(start.aiPrompt, /https:\/\/github\.com\/BEATiFYAUDIO\/contentbox/);
@@ -291,7 +363,8 @@ test('published Mission 01 invite generates safe static mission start page and A
   assert.equal(start.aiPrompt.includes('darryl-private@example.test'), false);
   const html = renderMissionStart(start);
   assert.match(html, /Copy AI Prompt/);
-  assert.match(html, /What success looks like/);
+  assert.match(html, /Open Core Repository/);
+  assert.match(html, /You're ready when/);
   assert.match(html, /Contact Darryl/);
   assert.match(html, /Let Darryl know I(?:&#39;|')m starting/);
   assert.match(html, /mailto:certifydcreator%40gmail.com/);
@@ -302,7 +375,39 @@ test('published Mission 01 invite generates safe static mission start page and A
   assert.equal(html.includes('participantId'), false);
   assert.equal(html.includes('networkOrigin'), false);
   const links = buildMailtoLinks(start);
-  assert.match(links.help, /Mission%2001%20Help/);
+  assert.match(decodeURIComponent(links.help), /Help — 02 — Install Certifyd Core/);
+});
+
+test('Mission 04 start page covers Cloudflare DNS HTTPS and private route verification', async () => {
+  await resetDb();
+  await service.ensureCanonicalJourney('test');
+  const { buildStaticMissionStartDto } = await import('../src/lib/public-invite');
+  const { renderMissionStart } = await import('../src/lib/public-invite-renderer');
+  const mission = await prisma.mission.findUniqueOrThrow({ where: { slug: 'connect-core-to-web' }, include: { milestones: { where: { active: true }, orderBy: { sortOrder: 'asc' } } } });
+  assert.equal(mission.sequence, 4);
+  assert.equal(mission.milestones.some((milestone) => /Cloudflare Tunnel/.test(milestone.title)), true);
+  assert.equal(mission.milestones.some((milestone) => /DNS/.test(milestone.title)), true);
+  assert.equal(mission.milestones.some((milestone) => /HTTPS/.test(milestone.title)), true);
+  assert.equal(mission.milestones.some((milestone) => /Public Certifyd page reachable/.test(milestone.title)), true);
+  assert.equal(mission.milestones.some((milestone) => /Private\/admin routes/.test(milestone.title)), true);
+  const participant = await service.createParticipant({ name: 'Cloudflare Demo', email: 'cloudflare-private@example.test', missionId: mission.id });
+  const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id } });
+  const { invite } = await service.generateInvite(participant.id, 'test', assignment.id);
+  await service.publishInvite(invite.id);
+  const source = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: true } } } });
+  const start = buildStaticMissionStartDto(source, 'certifydcreator@gmail.com');
+  assert.ok(start);
+  assert.equal(start.missionEyebrow, 'MISSION 04');
+  assert.match(start.aiPrompt, /Cloudflare Tunnel/);
+  assert.match(start.aiPrompt, /public hostname/);
+  assert.match(start.aiPrompt, /DNS/);
+  assert.match(start.aiPrompt, /Verify HTTPS/);
+  assert.match(start.aiPrompt,  /private\/admin routes/i);
+  assert.match(start.aiPrompt, /repository documentation|documentation as the source of truth/i);
+  const html = renderMissionStart(start);
+  assert.match(html, /Connect Your Core to the Web/);
+  assert.equal(html.includes('cloudflare-private@example.test'), false);
+  assert.equal(html.includes(participant.id), false);
 });
 
 test('static publishing omits unpublished invites, removes unpublished pages, and detects no-op publishes', async () => {

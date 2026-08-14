@@ -71,6 +71,7 @@ model MissionMilestone {
   title       String
   description String                        @default("")
   sortOrder   Int
+  active      Boolean                       @default(true)
   createdAt   DateTime                      @default(now())
   updatedAt   DateTime                      @updatedAt
   mission     Mission                       @relation(fields: [missionId], references: [id], onDelete: Cascade)

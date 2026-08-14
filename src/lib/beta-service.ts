@@ -5,7 +5,22 @@ import { idSchema, inviteCodeSchema, milestoneSchema, milestoneStatusSchema, mis
 
 export type ParticipantInput = unknown;
 const INVITE_OPEN_DEBOUNCE_MS = 15 * 60 * 1000;
-const JOURNEY_SLUGS = ['install-certifyd-core', 'set-up-your-core', 'publish-your-first-work', 'test-commerce', 'collaborate', 'run-your-own-network'];
+const JOURNEY_SLUGS = ['get-ready-to-run-certifyd-core', 'install-certifyd-core', 'set-up-your-core', 'connect-core-to-web', 'publish-your-first-work', 'test-commerce', 'collaborate', 'run-your-own-network'];
+
+type CanonicalMissionDefinition = {
+  sequence: number;
+  name: string;
+  slug: string;
+  shortDescription: string;
+  inviteCopy: string;
+  publicStartEnabled?: boolean;
+  startHeading?: string;
+  startIntro?: string;
+  publicInstructions?: string;
+  aiStarterPrompt?: string;
+  successCriteria?: string;
+  milestones: string[];
+};
 
 export type PublicInviteView = {
   status: InviteStatus;
@@ -297,34 +312,44 @@ export function buildParticipantTree(participants: Pick<Participant, 'id' | 'nam
 
 export async function ensureCanonicalJourney(actor = 'system') {
   const definitions = canonicalJourneyDefinitions();
+  const activeMissionIds: string[] = [];
   for (const definition of definitions) {
     const mission = await prisma.mission.upsert({
       where: { slug: definition.slug },
       update: { name: definition.name, sequence: definition.sequence, shortDescription: definition.shortDescription, inviteCopy: definition.inviteCopy, publicStartEnabled: definition.publicStartEnabled || false, startHeading: definition.startHeading || '', startIntro: definition.startIntro || '', publicInstructions: definition.publicInstructions || '', aiStarterPrompt: definition.aiStarterPrompt || '', successCriteria: definition.successCriteria || '', active: true },
       create: { name: definition.name, slug: definition.slug, sequence: definition.sequence, shortDescription: definition.shortDescription, inviteCopy: definition.inviteCopy, publicStartEnabled: definition.publicStartEnabled || false, startHeading: definition.startHeading || '', startIntro: definition.startIntro || '', publicInstructions: definition.publicInstructions || '', aiStarterPrompt: definition.aiStarterPrompt || '', successCriteria: definition.successCriteria || '', active: true },
     });
+    activeMissionIds.push(mission.id);
     for (let index = 0; index < definition.milestones.length; index += 1) {
       const title = definition.milestones[index];
       const existing = await prisma.missionMilestone.findFirst({ where: { missionId: mission.id, title } });
-      if (existing) await prisma.missionMilestone.update({ where: { id: existing.id }, data: { sortOrder: index } });
-      else await prisma.missionMilestone.create({ data: { missionId: mission.id, title, sortOrder: index } });
+      if (existing) await prisma.missionMilestone.update({ where: { id: existing.id }, data: { sortOrder: index, active: true } });
+      else await prisma.missionMilestone.create({ data: { missionId: mission.id, title, sortOrder: index, active: true } });
     }
+    await prisma.missionMilestone.updateMany({ where: { missionId: mission.id, title: { notIn: definition.milestones } }, data: { active: false } });
+    await prisma.participantMission.updateMany({ where: { missionId: mission.id }, data: { sequence: mission.sequence } });
   }
+  await prisma.mission.updateMany({ where: { active: true, id: { notIn: activeMissionIds }, OR: [{ name: 'Run your own creator network' }, { name: 'Run Your Own Creator Network' }] }, data: { active: false } });
   await audit(actor, 'journey.seeded', undefined, { stages: definitions.length });
 }
 
 export async function ensurePracticeParticipant(actor = 'system') {
   await ensureCanonicalJourney(actor);
+  const ready = await prisma.mission.findUniqueOrThrow({ where: { slug: 'get-ready-to-run-certifyd-core' } });
   const install = await prisma.mission.findUniqueOrThrow({ where: { slug: 'install-certifyd-core' } });
   const participant = await prisma.participant.upsert({
     where: { email: 'darryl@beatifygroup.com' },
     update: { name: 'Darryl Hillock', organizationOrProject: 'Certifyd', roleDescription: 'Founder practice participant', aiAgent: 'Codex', operatingSystem: 'Local machine' },
     create: { publicCode: generateInviteCode(), name: 'Darryl Hillock', email: 'darryl@beatifygroup.com', organizationOrProject: 'Certifyd', roleDescription: 'Founder practice participant', aiAgent: 'Codex', operatingSystem: 'Local machine', status: ParticipantStatus.INVITED },
   });
-  const assignment = await prisma.$transaction((tx) => createAssignmentForMission(tx, participant.id, install.id, ParticipantMissionStatus.ACTIVE));
+  const assignment = await prisma.$transaction((tx) => createAssignmentForMission(tx, participant.id, ready.id, ParticipantMissionStatus.ACTIVE));
+  const installAssignment = await prisma.participantMission.findUnique({ where: { participantId_missionId: { participantId: participant.id, missionId: install.id } } });
+  if (!installAssignment) {
+    await prisma.$transaction((tx) => createAssignmentForMission(tx, participant.id, install.id, ParticipantMissionStatus.ASSIGNED));
+  }
   const existingInvite = await prisma.invite.findFirst({ where: { participantId: participant.id, participantMissionId: assignment.id, status: { notIn: [InviteStatus.REVOKED, InviteStatus.EXPIRED] } }, orderBy: { createdAt: 'desc' } });
   const invite = existingInvite ? { invite: existingInvite, code: existingInvite.code } : await generateInvite(participant.id, actor, assignment.id);
-  await audit(actor, 'practice-participant.ensured', participant.id, { participantMissionId: assignment.id, inviteId: invite.invite.id });
+  await audit(actor, 'practice-participant.ensured', participant.id, { participantMissionId: assignment.id, installMissionId: install.id, inviteId: invite.invite.id });
   return { participant, assignment, invite: invite.invite, code: invite.code };
 }
 
@@ -353,7 +378,7 @@ async function createAssignmentForMission(tx: Prisma.TransactionClient, particip
 }
 
 async function createProgressForAssignment(tx: Prisma.TransactionClient, participantMissionId: string, missionId: string) {
-  const milestones = await tx.missionMilestone.findMany({ where: { missionId }, orderBy: { sortOrder: 'asc' } });
+  const milestones = await tx.missionMilestone.findMany({ where: { missionId, active: true }, orderBy: { sortOrder: 'asc' } });
   for (const milestone of milestones) {
     await tx.participantMissionProgress.upsert({ where: { participantMissionId_milestoneId: { participantMissionId, milestoneId: milestone.id } }, update: {}, create: { participantMissionId, milestoneId: milestone.id } });
   }
@@ -364,58 +389,83 @@ async function currentAssignment(tx: Prisma.TransactionClient, participantId: st
     (await tx.participantMission.findFirst({ where: { participantId }, orderBy: [{ sequence: 'desc' }] }));
 }
 
-function canonicalJourneyDefinitions() {
+function canonicalJourneyDefinitions(): CanonicalMissionDefinition[] {
   return [
     {
       sequence: 1,
-      name: '01 — Install Certifyd Core',
+      name: '01 — Get Ready to Run Certifyd Core',
       slug: JOURNEY_SLUGS[0],
-      shortDescription: 'Get Certifyd Core installed and running on your own machine with the help of your preferred AI coding agent.',
-      inviteCopy: 'Your first Certifyd technical beta mission is to get Certifyd Core cloned, installed, configured, and running locally with your preferred AI coding agent.',
+      shortDescription: "Choose how you'll operate Certifyd Core: with an AI coding agent or directly from the command line.",
+      inviteCopy: "Your first Certifyd technical beta mission is simple: choose how you'll operate Certifyd Core and confirm you're ready to install it in the next mission.",
+      publicStartEnabled: true,
+      startHeading: 'Get Ready to Run Certifyd Core',
+      startIntro: "Choose how you'll operate Certifyd Core. You can use an AI coding agent or continue directly from the command line if you're comfortable doing that work yourself.",
+      publicInstructions: "Choose your path. When your AI coding agent is ready, or you're comfortable operating from the command line, you're ready to continue to Mission 02.",
+      successCriteria: "You either have an AI coding agent open, signed in and able to work with local files and commands, or you're comfortable doing those tasks yourself from the command line.",
+      milestones: ['Operating path selected', 'AI coding agent ready OR CLI path confirmed', 'Technical beta expectations understood', 'Self-hosting responsibility understood', 'Ready to install Certifyd Core'],
+    },
+    {
+      sequence: 2,
+      name: '02 — Install Certifyd Core',
+      slug: JOURNEY_SLUGS[1],
+      shortDescription: 'Install Certifyd Core and get it running locally.',
+      inviteCopy: 'Your Certifyd technical beta mission is to get Certifyd Core cloned, installed, configured, and running locally with your AI coding agent or directly from the command line.',
       publicStartEnabled: true,
       startHeading: 'Install Certifyd Core',
-      startIntro: "You don't need to know how to install Certifyd Core yourself. Start with the AI assistant you already use. Open ChatGPT, Gemini, Claude, Copilot, or another general-purpose AI assistant and paste the prompt below.",
-      publicInstructions: "Use the AI assistant you're already comfortable with. The important part is that it can read the repository documentation and guide you through your local setup.",
-      aiStarterPrompt: '',
+      startIntro: "Use your AI coding agent or the command line to install Certifyd Core from the repository documentation.",
+      publicInstructions: "Use the AI assistant you're already comfortable with, or open the repository and follow the installation documentation directly.",
       successCriteria: 'Certifyd Core is running on your computer, the local interface opens, and its basic diagnostics are healthy.',
       milestones: ['Repository cloned', 'Dependencies installed', 'Configuration completed', 'Certifyd Core starts successfully', 'Local interface opens', 'Basic diagnostics healthy'],
     },
     {
-      sequence: 2,
-      name: '02 — Set Up Your Core',
-      slug: JOURNEY_SLUGS[1],
-      shortDescription: 'Configure your Core installation for real use.',
-      inviteCopy: 'Your next Certifyd technical beta mission is to configure your Core installation for a real workflow without assuming every optional service is required.',
-      milestones: ['Identity/profile established', 'Public origin configured', 'Required local services verified', 'Commerce configuration reviewed', 'Core ready for a real workflow'],
+      sequence: 3,
+      name: '03 — Set Up Your Core',
+      slug: JOURNEY_SLUGS[2],
+      shortDescription: 'Configure your local Certifyd Core installation for real use.',
+      inviteCopy: 'Your next Certifyd technical beta mission is to configure your local Certifyd Core installation for real use before connecting it publicly.',
+      milestones: ['Identity/profile established', 'Required local services verified', 'Commerce configuration reviewed', 'Local Core configuration verified', 'Core ready to connect publicly'],
     },
     {
-      sequence: 3,
-      name: '03 — Publish Your First Work',
-      slug: JOURNEY_SLUGS[2],
+      sequence: 4,
+      name: '04 — Connect Your Core to the Web',
+      slug: JOURNEY_SLUGS[3],
+      shortDescription: 'Connect your Certifyd Core installation to your domain using Cloudflare so your public Certifyd presence can be reached securely from the web.',
+      inviteCopy: 'Your next Certifyd technical beta mission is to connect your local Certifyd Core installation to the web through Cloudflare while keeping private/admin surfaces inaccessible publicly.',
+      publicStartEnabled: true,
+      startHeading: 'Connect Your Core to the Web',
+      startIntro: 'Take a working local Core installation and make its intended public surfaces reachable through your domain without exposing private or admin routes.',
+      publicInstructions: 'Use your AI coding agent or follow the Certifyd Core documentation directly for Cloudflare Tunnel, public hostname, DNS and route verification.',
+      successCriteria: 'Your public Certifyd page is reachable over HTTPS from the web, and private/admin routes are not reachable publicly.',
+      milestones: ['Cloudflare account/access ready', 'Domain available in Cloudflare', 'Cloudflare Tunnel configured', 'Certifyd public service connected to tunnel', 'Public hostname/subdomain selected', 'DNS/public hostname configured', 'HTTPS verified', 'Public Certifyd page reachable externally', 'Private/admin routes verified inaccessible publicly'],
+    },
+    {
+      sequence: 5,
+      name: '05 — Publish Your First Work',
+      slug: JOURNEY_SLUGS[4],
       shortDescription: 'Use Certifyd Core to author or publish a real piece of work.',
       inviteCopy: 'Your next Certifyd technical beta mission is to publish a real creator asset through Certifyd Core and verify the public output.',
       milestones: ['Real work selected', 'Work added to Certifyd Core', 'Metadata completed', 'Ownership/provenance reviewed', 'Published successfully', 'Public output verified'],
     },
     {
-      sequence: 4,
-      name: '04 — Test Commerce',
-      slug: JOURNEY_SLUGS[3],
+      sequence: 6,
+      name: '06 — Test Commerce',
+      slug: JOURNEY_SLUGS[5],
       shortDescription: 'Use Certifyd commerce in a real transaction or unlock flow.',
       inviteCopy: 'Your next Certifyd technical beta mission is to test the commerce or unlock path currently supported by your Core setup.',
       milestones: ['Paid/unlockable item configured', 'Public purchase/unlock path verified', 'Invoice/payment flow initiated', 'Payment completed', 'Entitlement/unlock verified', 'Settlement/transaction state reviewed'],
     },
     {
-      sequence: 5,
-      name: '05 — Collaborate',
-      slug: JOURNEY_SLUGS[4],
+      sequence: 7,
+      name: '07 — Collaborate',
+      slug: JOURNEY_SLUGS[6],
       shortDescription: 'Bring another real person into a collaboration, permissions, splits, publishing, or derivative workflow.',
       inviteCopy: 'Your next Certifyd technical beta mission is to complete a real collaboration or permission workflow with another person.',
       milestones: ['Collaborator identified', 'Collaborator invited', 'Relationship established', 'Split/permission/workflow configured', 'Collaborative action completed', 'Result verified'],
     },
     {
-      sequence: 6,
-      name: '06 — Run Your Own Network',
-      slug: JOURNEY_SLUGS[5],
+      sequence: 8,
+      name: '08 — Run Your Own Network',
+      slug: JOURNEY_SLUGS[7],
       shortDescription: 'Bring someone you already work with into Certifyd and operate a real creator relationship through your own Core.',
       inviteCopy: 'Your final Certifyd technical beta mission is to operate Certifyd as your own creator network rather than simply use it alone.',
       milestones: ['Downstream participant identified', 'Personal invite created', 'Participant onboarded', 'Real relationship/workflow completed', 'Commerce/collaboration/publishing tested through network', 'Participant operates flow with minimal founder intervention'],
