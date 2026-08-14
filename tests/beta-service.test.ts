@@ -67,7 +67,7 @@ test('invite tokens are URL-safe, high entropy and unique', async () => {
 
 
 test('invite URL helpers separate local preview from published public URL', async () => {
-  const { localPreviewInviteUrl, localPreviewMissionStartUrl, publicInviteUrl, publicMissionStartUrl } = await import('../src/lib/urls');
+  const { localPreviewInviteUrl, localPreviewMissionInstallUrl, localPreviewMissionStartUrl, publicInviteUrl, publicMissionInstallUrl, publicMissionStartUrl } = await import('../src/lib/urls');
   const code = 'test-public-code';
   const headers = new Map<string, string>([['host', 'localhost:3001']]);
   const localUrl = localPreviewInviteUrl(code, { get: (name: string) => headers.get(name) || null });
@@ -76,6 +76,8 @@ test('invite URL helpers separate local preview from published public URL', asyn
   assert.equal(publicUrl, 'https://beta.certifyd.me/invite/test-public-code/');
   assert.equal(localPreviewMissionStartUrl(code, { get: (name: string) => headers.get(name) || null }), 'http://localhost:3001/invite/test-public-code/start/');
   assert.equal(publicMissionStartUrl(code), 'https://beta.certifyd.me/invite/test-public-code/start/');
+  assert.equal(localPreviewMissionInstallUrl(code, { get: (name: string) => headers.get(name) || null }), 'http://localhost:3001/invite/test-public-code/install/');
+  assert.equal(publicMissionInstallUrl(code), 'https://beta.certifyd.me/invite/test-public-code/install/');
   assert.equal(publicUrl.includes('localhost'), false);
   assert.notEqual(localUrl, publicUrl);
 });
@@ -321,12 +323,77 @@ test('published Mission 01 invite generates readiness start page without install
   assert.match(html, /comfortable with the command line/);
   assert.match(html, /AI is optional/);
   assert.match(html, /operating your own infrastructure/);
-  assert.match(html, /You're ready when/);
+  assert.match(html, /You(?:&#39;|')re ready when/);
+  assert.match(html, /Agent ready\?/);
+  assert.match(html, /Continue — Install Certifyd Core/);
+  assert.match(html, new RegExp(`/invite/${invite.code}/install/`));
+  assert.match(html, /Contact Darryl/);
+  assert.equal(html.includes('Let Darryl know'), false);
   assert.equal(html.includes('Clone Certifyd Core'), false);
   assert.equal(html.includes('Repository cloned'), false);
   assert.equal(html.includes('ready-private@example.test'), false);
   assert.equal(html.includes('Founder note'), false);
   assert.equal(html.includes(participant.id), false);
+});
+
+test('Mission 01 static continuation generates Mission 02 install page without mutating local state', async () => {
+  await resetDb();
+  process.env.BETA_CONTACT_EMAIL = 'certifydcreator@gmail.com';
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const publisher = await import('../src/lib/static-publisher');
+  await fs.rm(publisher.PUBLIC_OUTPUT_DIR, { recursive: true, force: true });
+  await service.ensureCanonicalJourney('test');
+  const readyMission = await prisma.mission.findUniqueOrThrow({ where: { slug: 'get-ready-to-run-certifyd-core' } });
+  const participant = await service.createParticipant({ name: 'Continuation Demo', email: 'continuation-private@example.test', missionId: readyMission.id });
+  const readyAssignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id, missionId: readyMission.id } });
+  const { invite } = await service.generateInvite(participant.id, 'test', readyAssignment.id);
+  await service.publishInvite(invite.id);
+
+  let result = await publisher.publishPublicSite();
+  assert.equal(result.changed, true);
+  const inviteDir = path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code);
+  const startHtml = await fs.readFile(path.join(inviteDir, 'start', 'index.html'), 'utf8');
+  const installHtml = await fs.readFile(path.join(inviteDir, 'install', 'index.html'), 'utf8');
+  assert.match(startHtml, new RegExp(`/invite/${invite.code}/install/`));
+  assert.match(startHtml, /Continue — Install Certifyd Core/);
+  assert.match(installHtml, /02 — Install Certifyd Core|MISSION 02/);
+  assert.match(installHtml, /Open the coding agent you prepared in Mission 01/);
+  assert.match(installHtml, /Copy Certifyd Setup Prompt/);
+  assert.match(installHtml, /https:\/\/github\.com\/BEATiFYAUDIO\/contentbox/);
+  assert.match(installHtml, /Prefer the command line\?/);
+  assert.match(installHtml, /Certifyd Core is running on your computer/);
+  assert.match(installHtml, /Mission%2002%20Help/);
+  assert.equal(installHtml.includes('continuation-private@example.test'), false);
+  assert.equal(installHtml.includes(participant.id), false);
+  assert.equal(installHtml.includes(readyAssignment.id), false);
+  assert.equal(installHtml.includes('participantId'), false);
+
+  const unchangedReadyAssignment = await prisma.participantMission.findUniqueOrThrow({ where: { id: readyAssignment.id } });
+  assert.equal(unchangedReadyAssignment.status, ParticipantMissionStatus.ACTIVE);
+  const installMission = await prisma.mission.findUniqueOrThrow({ where: { slug: 'install-certifyd-core' } });
+  const installAssignment = await prisma.participantMission.findUnique({ where: { participantId_missionId: { participantId: participant.id, missionId: installMission.id } } });
+  assert.equal(installAssignment, null);
+
+  result = await publisher.publishPublicSite();
+  assert.equal(result.changed, false);
+  assert.equal(result.message, 'No public changes detected. Publish skipped.');
+
+  await service.unpublishInvite(invite.id);
+  result = await publisher.publishPublicSite();
+  assert.equal(result.changed, true);
+  await assert.rejects(() => fs.stat(path.join(inviteDir, 'index.html')));
+  await assert.rejects(() => fs.stat(path.join(inviteDir, 'start', 'index.html')));
+  await assert.rejects(() => fs.stat(path.join(inviteDir, 'install', 'index.html')));
+
+  await service.publishInvite(invite.id);
+  await publisher.publishPublicSite();
+  await service.revokeInvite(invite.id);
+  result = await publisher.publishPublicSite();
+  assert.equal(result.changed, true);
+  await assert.rejects(() => fs.stat(path.join(inviteDir, 'index.html')));
+  await assert.rejects(() => fs.stat(path.join(inviteDir, 'start', 'index.html')));
+  await assert.rejects(() => fs.stat(path.join(inviteDir, 'install', 'index.html')));
 });
 
 test('published Mission 02 invite generates safe install start page and AI prompt', async () => {
@@ -362,11 +429,14 @@ test('published Mission 02 invite generates safe install start page and AI promp
   assert.equal(/C:\\/.test(start.aiPrompt), false);
   assert.equal(start.aiPrompt.includes('darryl-private@example.test'), false);
   const html = renderMissionStart(start);
-  assert.match(html, /Copy AI Prompt/);
+  assert.match(html, /AI coding agent path/);
+  assert.match(html, /Copy Certifyd Setup Prompt/);
   assert.match(html, /Open Core Repository/);
-  assert.match(html, /You're ready when/);
+  assert.match(html, /Prefer the command line\?/);
+  assert.match(html, /follow the installation documentation directly/);
+  assert.match(html, /You(?:&#39;|')re done when/);
   assert.match(html, /Contact Darryl/);
-  assert.match(html, /Let Darryl know I(?:&#39;|')m starting/);
+  assert.equal(html.includes('Let Darryl know'), false);
   assert.match(html, /mailto:certifydcreator%40gmail.com/);
   assert.equal(html.includes('darryl-private@example.test'), false);
   assert.equal(html.includes('Founder note'), false);
@@ -375,7 +445,7 @@ test('published Mission 02 invite generates safe install start page and AI promp
   assert.equal(html.includes('participantId'), false);
   assert.equal(html.includes('networkOrigin'), false);
   const links = buildMailtoLinks(start);
-  assert.match(decodeURIComponent(links.help), /Help — 02 — Install Certifyd Core/);
+  assert.match(decodeURIComponent(links.help), /Mission 02 Help — Install Certifyd Core/);
 });
 
 test('Mission 04 start page covers Cloudflare DNS HTTPS and private route verification', async () => {
@@ -440,7 +510,7 @@ test('static publishing omits unpublished invites, removes unpublished pages, an
   const startHtml = await fs.readFile(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'start', 'index.html'), 'utf8');
   assert.match(inviteHtml, /Accept &amp; Start Mission/);
   assert.match(inviteHtml, new RegExp(`/invite/${invite.code}/start/`));
-  assert.match(startHtml, /Copy AI Prompt/);
+  assert.match(startHtml, /Copy Certifyd Setup Prompt/);
   assert.match(startHtml, /https:\/\/github\.com\/BEATiFYAUDIO\/contentbox/);
   assert.match(inviteHtml, /Decline/);
   assert.match(inviteHtml, /href="mailto:/);
@@ -459,6 +529,7 @@ test('static publishing omits unpublished invites, removes unpublished pages, an
   assert.equal(result.changed, true);
   await assert.rejects(() => fs.stat(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'index.html')));
   await assert.rejects(() => fs.stat(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'start', 'index.html')));
+  await assert.rejects(() => fs.stat(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'install', 'index.html')));
 });
 
 

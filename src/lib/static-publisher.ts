@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { InviteStatus } from '@prisma/client';
 import { prisma } from './db';
-import { buildStaticInviteDto, buildStaticMissionStartDto, type StaticInviteDto } from './public-invite';
+import { buildStaticInviteDto, buildStaticMissionInstallContinuationDto, buildStaticMissionStartDto, type StaticInviteDto } from './public-invite';
 import { renderMissionStart, renderPublicHome, renderPublicInvite } from './public-invite-renderer';
 
 export const PUBLIC_OUTPUT_DIR = path.join(process.cwd(), 'generated-public');
@@ -37,6 +37,15 @@ export async function publishPublicSite(contactEmail = publicContactEmail()): Pr
         const startDir = path.join(inviteDir, 'start');
         await fs.mkdir(startDir, { recursive: true });
         await fs.writeFile(path.join(startDir, 'index.html'), renderMissionStart(start));
+      }
+      const installMission = await prisma.mission.findUnique({ where: { slug: 'install-certifyd-core' } });
+      if (installMission) {
+        const install = buildStaticMissionInstallContinuationDto(sourceInvite, installMission, contactEmail);
+        if (install) {
+          const installDir = path.join(inviteDir, 'install');
+          await fs.mkdir(installDir, { recursive: true });
+          await fs.writeFile(path.join(installDir, 'index.html'), renderMissionStart(install));
+        }
       }
     }
   }

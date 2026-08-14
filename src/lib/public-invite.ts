@@ -34,6 +34,9 @@ export type StaticMissionStartDto = {
   choices: MissionStartChoice[];
   sections: { heading: string; body: string }[];
   repositoryUrl: string | null;
+  continuationPath: string | null;
+  continuationLabel: string | null;
+  continuationIntro: string | null;
 };
 
 export type MailtoLinks = { accept: string; decline: string; help: string; starting: string };
@@ -82,6 +85,38 @@ export function buildStaticMissionStartDto(invite: InviteWithAssignment, contact
     choices: buildMissionChoices(mission.slug),
     sections: buildMissionSections(mission.slug),
     repositoryUrl,
+    continuationPath: mission.slug === 'get-ready-to-run-certifyd-core' ? `/invite/${invite.code}/install/` : null,
+    continuationLabel: mission.slug === 'get-ready-to-run-certifyd-core' ? 'Continue — Install Certifyd Core' : null,
+    continuationIntro: mission.slug === 'get-ready-to-run-certifyd-core' ? "Great. Next you'll use your AI coding agent — or the command line — to install Certifyd Core." : null,
+  };
+}
+
+export function buildStaticMissionInstallContinuationDto(invite: InviteWithAssignment, mission: Mission, contactEmail: string): StaticMissionStartDto | null {
+  if (!invite.published) return null;
+  if (invite.status === InviteStatus.REVOKED || invite.status === InviteStatus.EXPIRED) return null;
+  if (invite.participantMission?.mission.slug !== 'get-ready-to-run-certifyd-core') return null;
+  if (mission.slug !== 'install-certifyd-core' || !mission.publicStartEnabled) return null;
+  const repositoryUrl = certifydCoreRepositoryUrl();
+  const missionTitle = mission.name;
+  return {
+    code: invite.code,
+    displayName: invite.participant.name,
+    missionEyebrow: 'MISSION 02',
+    missionTitle,
+    missionSlug: mission.slug,
+    missionDescription: mission.shortDescription,
+    startHeading: mission.startHeading.trim() || stripMissionNumber(missionTitle),
+    startIntro: "Open the coding agent you prepared in Mission 01. Now we're going to give it Certifyd Core and let it guide you through the installation.",
+    publicInstructions: mission.publicInstructions.trim() || defaultPublicInstructions(mission.slug),
+    aiPrompt: buildAiStarterPrompt(repositoryUrl, mission.aiStarterPrompt, mission.slug),
+    successCriteria: mission.successCriteria.trim() || defaultSuccessCriteria(mission.slug),
+    contactEmail,
+    choices: [],
+    sections: [],
+    repositoryUrl,
+    continuationPath: null,
+    continuationLabel: null,
+    continuationIntro: null,
   };
 }
 
@@ -89,7 +124,7 @@ export function buildMailtoLinks(invite: Pick<StaticInviteDto | StaticMissionSta
   return {
     accept: `/invite/${invite.code}/start/`,
     decline: mailto(invite.contactEmail, `Certifyd Beta — Decline — ${invite.displayName} — ${invite.code}`, `Thanks for the invitation. I'm going to pass on this Certifyd technical beta mission for now.\n\nParticipant: ${invite.displayName}\nInvite: ${invite.code}\nMission: ${invite.missionTitle}`),
-    help: mailto(invite.contactEmail, `Certifyd Beta — Help — ${invite.missionTitle} — ${invite.displayName} — ${invite.code}`, `I'm working through ${invite.missionTitle} and need some help.\n\nParticipant: ${invite.displayName}\nInvite: ${invite.code}`),
+    help: mailto(invite.contactEmail, `Certifyd Beta — ${missionHelpSubject(invite.missionTitle)} — ${invite.displayName} — ${invite.code}`, `I'm working through ${invite.missionTitle} and need some help.\n\nParticipant: ${invite.displayName}\nInvite: ${invite.code}`),
     starting: mailto(invite.contactEmail, `Certifyd Beta — Starting — ${invite.missionTitle} — ${invite.displayName} — ${invite.code}`, `I'm starting ${invite.missionTitle}.\n\nParticipant: ${invite.displayName}\nInvite: ${invite.code}`),
   };
 }
@@ -210,4 +245,10 @@ function mailto(to: string, subject: string, body: string): string {
 
 function stripMissionNumber(value: string) {
   return value.replace(/^\d+\s*[—-]\s*/, '');
+}
+
+function missionHelpSubject(missionTitle: string) {
+  const match = missionTitle.match(/^(\d+)\s*[—-]\s*(.+)$/);
+  if (!match) return `Help — ${missionTitle}`;
+  return `Mission ${match[1]} Help — ${match[2]}`;
 }
