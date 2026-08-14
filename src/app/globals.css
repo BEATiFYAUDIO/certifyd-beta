@@ -13,6 +13,8 @@ a { color:inherit; }
 .button.primary, button.primary { background:linear-gradient(135deg,#ffd56a,var(--orange)); color:#090909; border:0; }
 .main { padding:36px 0 64px; }
 .panel { background:rgba(12,25,36,.82); border:1px solid var(--line); border-radius:18px; padding:22px; box-shadow:0 16px 48px rgba(0,0,0,.22); }
+.infrastructure-glow { position:relative; border-color:rgba(255,153,0,.56); background:radial-gradient(circle at 10% 0,rgba(255,153,0,.16),transparent 32%), linear-gradient(145deg,rgba(13,40,54,.78),rgba(4,17,27,.68)); box-shadow:0 0 0 1px rgba(255,153,0,.08), 0 0 34px rgba(255,153,0,.16), 0 22px 70px rgba(74,167,209,.12); }
+.infrastructure-glow .eyebrow { color:#ffd56a; text-shadow:0 0 16px rgba(255,153,0,.55); }
 .grid { display:grid; gap:18px; }
 .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
 .grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }

@@ -16,8 +16,8 @@ const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
   PUBLIC_SITE_ORIGIN: z.string().url().default('https://beta.certifyd.me'),
   CERTIFYD_CORE_REPOSITORY_URL: z.string().url().optional(),
-  CODEX_URL: z.string().url().default('https://github.com/openai/codex'),
-  CLAUDE_CODE_URL: z.string().url().default('https://docs.anthropic.com/en/docs/claude-code/overview'),
+  CODEX_URL: z.string().url().default('https://openai.com/codex/'),
+  CLAUDE_CODE_URL: z.string().url().default('https://claude.com/product/claude-code'),
   NODE_ENV: z.string().default('development'),
 }).superRefine((env, ctx) => {
   if (env.NODE_ENV !== 'production') return;
@@ -43,8 +43,8 @@ export function getEnv() {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || 'http://localhost:3000',
     PUBLIC_SITE_ORIGIN: process.env.PUBLIC_SITE_ORIGIN || 'https://beta.certifyd.me',
     CERTIFYD_CORE_REPOSITORY_URL: process.env.CERTIFYD_CORE_REPOSITORY_URL,
-    CODEX_URL: process.env.CODEX_URL || 'https://github.com/openai/codex',
-    CLAUDE_CODE_URL: process.env.CLAUDE_CODE_URL || 'https://docs.anthropic.com/en/docs/claude-code/overview',
+    CODEX_URL: process.env.CODEX_URL || 'https://openai.com/codex/',
+    CLAUDE_CODE_URL: process.env.CLAUDE_CODE_URL || 'https://claude.com/product/claude-code',
     NODE_ENV: process.env.NODE_ENV || 'development',
   });
 }

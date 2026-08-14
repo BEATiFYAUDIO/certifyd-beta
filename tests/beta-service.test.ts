@@ -12,8 +12,8 @@ process.env.SESSION_PASSWORD = '0123456789abcdef0123456789abcdef';
 process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
 process.env.PUBLIC_SITE_ORIGIN = 'https://beta.certifyd.me';
 process.env.CERTIFYD_CORE_REPOSITORY_URL = 'https://github.com/BEATiFYAUDIO/contentbox';
-process.env.CODEX_URL = 'https://github.com/openai/codex';
-process.env.CLAUDE_CODE_URL = 'https://docs.anthropic.com/en/docs/claude-code/overview';
+process.env.CODEX_URL = 'https://openai.com/codex/';
+process.env.CLAUDE_CODE_URL = 'https://claude.com/product/claude-code';
 
 execFileSync('npx', ['prisma', 'generate'], { cwd: process.cwd(), stdio: 'ignore', env: process.env });
 execFileSync('npx', ['prisma', 'migrate', 'deploy'], { cwd: process.cwd(), stdio: 'ignore', env: process.env });
@@ -330,10 +330,10 @@ test('published Mission 01 invite generates readiness start page without install
   assert.match(html, /This is a technical beta/);
   assert.match(html, /I use ChatGPT/);
   assert.match(html, /Get Codex/);
-  assert.match(html, /https:\/\/github\.com\/openai\/codex/);
+  assert.match(html, /https:\/\/openai\.com\/codex\//);
   assert.match(html, /I use Claude/);
   assert.match(html, /Get Claude Code/);
-  assert.match(html, /docs\.anthropic\.com\/en\/docs\/claude-code\/overview/);
+  assert.match(html, /https:\/\/claude\.com\/product\/claude-code/);
   assert.match(html, /I already use another coding agent/);
   assert.match(html, /comfortable with the command line/);
   assert.match(html, /AI is optional/);
@@ -450,6 +450,9 @@ test('published Mission 02 invite generates safe install start page and AI promp
   assert.match(html, /Prefer the command line\?/);
   assert.match(html, /follow the installation documentation directly/);
   assert.match(html, /You(?:&#39;|')re done when/);
+  assert.match(html, /keep growing your network/);
+  assert.match(html, /move to the next mission/);
+  assert.match(html, /Your feedback is very valuable/);
   assert.match(html, /Contact Darryl/);
   assert.equal(html.includes('Let Darryl know'), false);
   assert.match(html, /mailto:certifydcreator%40gmail.com/);
