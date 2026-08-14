@@ -152,6 +152,35 @@ test('participant creation with duplicate email reuses existing participant with
   assert.equal(events.some((event) => event.action === 'participant.existing_email_reused'), true);
 });
 
+test('participant details can be edited without changing invite lifecycle state', async () => {
+  await resetDb();
+  const mission = await missionFixture('participant-edit');
+  const participant = await service.createParticipant({ name: 'Before Name', email: 'before@example.test', missionId: mission.id }, 'test');
+  const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id } });
+  const { invite } = await service.generateInvite(participant.id, 'test', assignment.id);
+  await service.publishInvite(invite.id, 'test');
+
+  const updated = await service.updateParticipant(participant.id, {
+    name: 'After Name',
+    email: 'after@example.test',
+    organizationOrProject: 'Edited Org',
+    roleDescription: 'Edited Role',
+    profileUrl: 'https://example.test/profile',
+    aiAgent: 'Codex',
+    operatingSystem: 'Windows',
+    status: ParticipantStatus.INSTALLING,
+  }, 'test');
+  const unchangedInvite = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id } });
+  const event = await prisma.auditEvent.findFirst({ where: { participantId: participant.id, action: 'participant.updated' } });
+
+  assert.equal(updated.name, 'After Name');
+  assert.equal(updated.email, 'after@example.test');
+  assert.equal(updated.status, ParticipantStatus.INSTALLING);
+  assert.equal(unchangedInvite.status, InviteStatus.CREATED);
+  assert.equal(unchangedInvite.published, true);
+  assert.ok(event);
+});
+
 test('participant can advance through missions without overwriting completed history', async () => {
   await resetDb();
   await service.ensureCanonicalJourney('test');
@@ -253,7 +282,10 @@ test('delete invite removes invite only and preserves participant mission histor
   const { invite } = await service.generateInvite(participant.id, 'test', assignment.id);
   await service.publishInvite(invite.id, 'test');
   const deleted = await service.deleteInvite(invite.id, 'test');
+  const repeated = await service.deleteInvite(invite.id, 'test');
+  assert.ok(deleted);
   assert.equal(deleted.id, invite.id);
+  assert.equal(repeated, null);
   assert.equal(await prisma.invite.count({ where: { id: invite.id } }), 0);
   assert.equal(await prisma.participant.count({ where: { id: participant.id } }), 1);
   assert.equal(await prisma.participantMission.count({ where: { id: assignment.id } }), 1);

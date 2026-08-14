@@ -20,6 +20,10 @@ export const participantSchema = z.object({
   parentParticipantId: idSchema.or(z.literal('')).optional().nullable(),
 });
 
+export const participantUpdateSchema = participantSchema
+  .omit({ missionId: true, parentParticipantId: true })
+  .extend({ status: participantStatusSchema.optional() });
+
 export const missionSchema = z.object({
   name: z.string().trim().min(1).max(120),
   slug: z.string().trim().min(1).max(120).regex(/^[a-z0-9-]+$/),

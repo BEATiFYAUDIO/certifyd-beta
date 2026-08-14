@@ -4,7 +4,7 @@ import { ParticipantMissionStatus, ParticipantStatus, MilestoneStatus } from '@p
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getSession, requireAdmin, verifyAdminPassword } from './auth';
-import { acceptInvite, addFounderNote, addMissionMilestone, advanceToNextMission, assignMission, createMission, createParticipant, deleteInvite, ensurePracticeParticipant, generateInvite, publishInvite, regenerateInvite, revokeInvite, unpublishInvite, updateParticipantMissionStatus, updateParticipantStatus, updateProgress } from './beta-service';
+import { acceptInvite, addFounderNote, addMissionMilestone, advanceToNextMission, assignMission, createMission, createParticipant, deleteInvite, ensurePracticeParticipant, generateInvite, publishInvite, regenerateInvite, revokeInvite, unpublishInvite, updateParticipant, updateParticipantMissionStatus, updateParticipantStatus, updateProgress } from './beta-service';
 import { rateLimit } from './rate-limit';
 import { publishAndDeployPublicSite } from './git-publisher';
 import { publicInviteUrl } from './urls';
@@ -41,6 +41,15 @@ export async function statusAction(formData: FormData) {
   await updateParticipantStatus(String(formData.get('participantId')), String(formData.get('status')) as ParticipantStatus, admin.email);
   revalidatePath('/admin');
   revalidatePath(`/admin/participants/${formData.get('participantId')}`);
+}
+
+export async function updateParticipantAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const participantId = String(formData.get('participantId'));
+  await updateParticipant(participantId, entries(formData), admin.email);
+  revalidatePath('/admin');
+  revalidatePath('/admin/participants');
+  revalidatePath(`/admin/participants/${participantId}`);
 }
 
 export async function assignMissionAction(formData: FormData) {
@@ -126,7 +135,7 @@ export async function deleteInviteAction(formData: FormData) {
   const admin = await requireAdmin();
   const participantId = String(formData.get('participantId') || '');
   const deleted = await deleteInvite(String(formData.get('inviteId')), admin.email);
-  if (deleted.published) await publishAndDeployPublicSite('delete beta invite page');
+  if (deleted?.published) await publishAndDeployPublicSite('delete beta invite page');
   if (participantId) revalidatePath(`/admin/participants/${participantId}`);
   revalidatePath('/admin/invites');
 }

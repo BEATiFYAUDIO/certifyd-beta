@@ -1,7 +1,7 @@
 import { InviteStatus, MilestoneStatus, ParticipantMissionStatus, ParticipantStatus, Prisma, type Invite, type Mission, type Participant, type ParticipantMission } from '@prisma/client';
 import { prisma } from './db';
 import { generateInviteCode, hashInviteCode, previewInviteCode } from './tokens';
-import { idSchema, inviteCodeSchema, milestoneSchema, milestoneStatusSchema, missionAssignmentStatusSchema, missionSchema, noteSchema, participantSchema, participantStatusSchema, progressNoteSchema } from './validation';
+import { idSchema, inviteCodeSchema, milestoneSchema, milestoneStatusSchema, missionAssignmentStatusSchema, missionSchema, noteSchema, participantSchema, participantStatusSchema, participantUpdateSchema, progressNoteSchema } from './validation';
 
 export type ParticipantInput = unknown;
 const INVITE_OPEN_DEBOUNCE_MS = 15 * 60 * 1000;
@@ -112,6 +112,32 @@ export async function updateParticipantStatus(participantId: string, status: Par
   return participant;
 }
 
+export async function updateParticipant(participantId: string, input: unknown, actor = 'admin') {
+  const safeParticipantId = idSchema.parse(participantId);
+  const data = participantUpdateSchema.parse(input);
+  const now = new Date();
+  const participant = await prisma.participant.update({
+    where: { id: safeParticipantId },
+    data: {
+      name: data.name,
+      email: data.email,
+      organizationOrProject: data.organizationOrProject,
+      roleDescription: data.roleDescription,
+      profileUrl: data.profileUrl,
+      aiAgent: data.aiAgent,
+      operatingSystem: data.operatingSystem,
+      status: data.status,
+      acceptedAt: data.status === ParticipantStatus.ACCEPTED ? now : data.status === ParticipantStatus.INVITED ? null : undefined,
+      completedAt: data.status === ParticipantStatus.COMPLETED ? now : data.status === ParticipantStatus.INVITED ? null : undefined,
+    },
+  });
+  await audit(actor, 'participant.updated', safeParticipantId, {
+    email: participant.email,
+    status: participant.status,
+  });
+  return participant;
+}
+
 export async function assignMission(participantId: string, missionId: string, actor = 'admin') {
   const safeParticipantId = idSchema.parse(participantId);
   const safeMissionId = idSchema.parse(missionId);
@@ -215,6 +241,8 @@ export async function unpublishInvite(inviteId: string, actor = 'admin') {
 
 export async function deleteInvite(inviteId: string, actor = 'admin') {
   const safeInviteId = idSchema.parse(inviteId);
+  const existing = await prisma.invite.findUnique({ where: { id: safeInviteId } });
+  if (!existing) return null;
   const invite = await prisma.invite.delete({ where: { id: safeInviteId } });
   await audit(actor, 'invite.deleted', invite.participantId, { inviteId: safeInviteId, codePreview: invite.codePreview, wasPublished: invite.published });
   return invite;
