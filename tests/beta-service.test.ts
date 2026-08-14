@@ -140,6 +140,18 @@ test('participant creation without explicit mission defaults invite to Mission 0
   assert.equal(publicInvite?.startPath, `/invite/${invite.code}/start/`);
 });
 
+test('participant creation with duplicate email reuses existing participant without crashing', async () => {
+  await resetDb();
+  const mission = await missionFixture('duplicate-email-mission');
+  const participant = await service.createParticipant({ name: 'Existing Tester', email: 'duplicate@example.test', missionId: mission.id }, 'test');
+  const reused = await service.createParticipant({ name: 'Duplicate Tester', email: 'duplicate@example.test', missionId: mission.id }, 'test');
+  const count = await prisma.participant.count({ where: { email: 'duplicate@example.test' } });
+  const events = await prisma.auditEvent.findMany({ where: { participantId: participant.id } });
+  assert.equal(reused.id, participant.id);
+  assert.equal(count, 1);
+  assert.equal(events.some((event) => event.action === 'participant.existing_email_reused'), true);
+});
+
 test('participant can advance through missions without overwriting completed history', async () => {
   await resetDb();
   await service.ensureCanonicalJourney('test');
@@ -231,6 +243,22 @@ test('revoked, expired and regenerated mission invites cannot be accepted', asyn
   const oldInvite = await service.generateInvite(participant.id, 'test', assignment.id);
   await service.regenerateInvite(participant.id, 'test', assignment.id);
   assert.equal((await service.acceptInvite(oldInvite.code)).ok, false);
+});
+
+test('delete invite removes invite only and preserves participant mission history', async () => {
+  await resetDb();
+  const mission = await missionFixture('delete-invite');
+  const participant = await service.createParticipant({ name: 'Delete Invite Tester', email: 'delete-invite@example.test', missionId: mission.id });
+  const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id, missionId: mission.id } });
+  const { invite } = await service.generateInvite(participant.id, 'test', assignment.id);
+  await service.publishInvite(invite.id, 'test');
+  const deleted = await service.deleteInvite(invite.id, 'test');
+  assert.equal(deleted.id, invite.id);
+  assert.equal(await prisma.invite.count({ where: { id: invite.id } }), 0);
+  assert.equal(await prisma.participant.count({ where: { id: participant.id } }), 1);
+  assert.equal(await prisma.participantMission.count({ where: { id: assignment.id } }), 1);
+  const event = await prisma.auditEvent.findFirst({ where: { participantId: participant.id, action: 'invite.deleted' } });
+  assert.ok(event);
 });
 
 test('milestones, assignment founder notes and downstream network origin are preserved', async () => {

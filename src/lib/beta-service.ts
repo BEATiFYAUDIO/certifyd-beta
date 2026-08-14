@@ -57,26 +57,43 @@ export async function createParticipant(input: ParticipantInput, actor = 'admin'
   const parent = data.parentParticipantId ? await prisma.participant.findUnique({ where: { id: data.parentParticipantId } }) : null;
   const networkOriginParticipantId = parent ? (parent.networkOriginParticipantId || parent.id) : null;
   const firstMissionId = data.missionId || (await defaultFirstMissionId());
-  const participant = await prisma.$transaction(async (tx) => {
-    const created = await tx.participant.create({
-      data: {
-        publicCode: generateInviteCode(),
-        name: data.name,
-        email: data.email,
-        organizationOrProject: data.organizationOrProject,
-        roleDescription: data.roleDescription,
-        profileUrl: data.profileUrl,
-        aiAgent: data.aiAgent,
-        operatingSystem: data.operatingSystem,
-        parentParticipantId: data.parentParticipantId || null,
-        networkOriginParticipantId,
-      },
-    });
+  const existing = await prisma.participant.findUnique({ where: { email: data.email } });
+  if (existing) {
+    if (firstMissionId) {
+      await prisma.$transaction((tx) => createAssignmentForMission(tx, existing.id, firstMissionId, ParticipantMissionStatus.ACTIVE));
+    }
+    await audit(actor, 'participant.existing_email_reused', existing.id, { email: data.email, missionId: firstMissionId });
+    return existing;
+  }
+  const result = await prisma.$transaction(async (tx) => {
+    let created: Participant;
+    try {
+      created = await tx.participant.create({
+        data: {
+          publicCode: generateInviteCode(),
+          name: data.name,
+          email: data.email,
+          organizationOrProject: data.organizationOrProject,
+          roleDescription: data.roleDescription,
+          profileUrl: data.profileUrl,
+          aiAgent: data.aiAgent,
+          operatingSystem: data.operatingSystem,
+          parentParticipantId: data.parentParticipantId || null,
+          networkOriginParticipantId,
+        },
+      });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+      const duplicate = await tx.participant.findUnique({ where: { email: data.email } });
+      if (!duplicate) throw error;
+      if (firstMissionId) await createAssignmentForMission(tx, duplicate.id, firstMissionId, ParticipantMissionStatus.ACTIVE);
+      return { participant: duplicate, created: false };
+    }
     if (firstMissionId) await createAssignmentForMission(tx, created.id, firstMissionId, ParticipantMissionStatus.ACTIVE);
-    return created;
+    return { participant: created, created: true };
   });
-  await audit(actor, 'participant.created', participant.id, { parentParticipantId: data.parentParticipantId || null, networkOriginParticipantId, missionId: firstMissionId });
-  return participant;
+  await audit(actor, result.created ? 'participant.created' : 'participant.existing_email_reused', result.participant.id, { parentParticipantId: data.parentParticipantId || null, networkOriginParticipantId, missionId: firstMissionId });
+  return result.participant;
 }
 
 export async function updateParticipantStatus(participantId: string, status: ParticipantStatus, actor = 'admin') {
@@ -193,6 +210,13 @@ export async function unpublishInvite(inviteId: string, actor = 'admin') {
   const safeInviteId = idSchema.parse(inviteId);
   const invite = await prisma.invite.update({ where: { id: safeInviteId }, data: { published: false, publishedAt: null } });
   await audit(actor, 'invite.unpublished', invite.participantId, { inviteId: safeInviteId });
+  return invite;
+}
+
+export async function deleteInvite(inviteId: string, actor = 'admin') {
+  const safeInviteId = idSchema.parse(inviteId);
+  const invite = await prisma.invite.delete({ where: { id: safeInviteId } });
+  await audit(actor, 'invite.deleted', invite.participantId, { inviteId: safeInviteId, codePreview: invite.codePreview, wasPublished: invite.published });
   return invite;
 }
 
