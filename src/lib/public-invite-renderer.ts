@@ -34,6 +34,9 @@ export function renderPublicHome(): string {
 
 export function renderPublicInvite(invite: StaticInviteDto): string {
   const links = buildMailtoLinks(invite);
+  const primaryAction = invite.startPath
+    ? `<a class="button primary" href="${escapeAttribute(invite.startPath)}">Accept &amp; Start Mission</a>`
+    : `<a class="button primary" href="${escapeAttribute(links.help)}">Contact Darryl</a>`;
   return renderPage(`${invite.displayName} — Certifyd Beta`, `
     <section class="panel hero">
       <p class="eyebrow">Private Invitation</p>
@@ -45,7 +48,7 @@ export function renderPublicInvite(invite: StaticInviteDto): string {
         <p class="muted">${escapeHtml(invite.missionDescription)}</p>
       </div>
       <div class="actions">
-        <a class="button primary" href="${escapeAttribute(invite.startPath || links.accept)}">Accept &amp; Start Mission</a>
+        ${primaryAction}
         <a class="button secondary" href="${escapeAttribute(links.decline)}">Decline</a>
       </div>
     </section>

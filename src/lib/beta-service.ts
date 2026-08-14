@@ -56,6 +56,7 @@ export async function createParticipant(input: ParticipantInput, actor = 'admin'
   const data = participantSchema.parse(input);
   const parent = data.parentParticipantId ? await prisma.participant.findUnique({ where: { id: data.parentParticipantId } }) : null;
   const networkOriginParticipantId = parent ? (parent.networkOriginParticipantId || parent.id) : null;
+  const firstMissionId = data.missionId || (await defaultFirstMissionId());
   const participant = await prisma.$transaction(async (tx) => {
     const created = await tx.participant.create({
       data: {
@@ -71,10 +72,10 @@ export async function createParticipant(input: ParticipantInput, actor = 'admin'
         networkOriginParticipantId,
       },
     });
-    if (data.missionId) await createAssignmentForMission(tx, created.id, data.missionId, ParticipantMissionStatus.ACTIVE);
+    if (firstMissionId) await createAssignmentForMission(tx, created.id, firstMissionId, ParticipantMissionStatus.ACTIVE);
     return created;
   });
-  await audit(actor, 'participant.created', participant.id, { parentParticipantId: data.parentParticipantId || null, networkOriginParticipantId, missionId: data.missionId || null });
+  await audit(actor, 'participant.created', participant.id, { parentParticipantId: data.parentParticipantId || null, networkOriginParticipantId, missionId: firstMissionId });
   return participant;
 }
 
@@ -146,7 +147,7 @@ export async function advanceToNextMission(participantId: string, actor = 'admin
 export async function generateInvite(participantId: string, actor = 'admin', participantMissionId?: string | null) {
   const safeParticipantId = idSchema.parse(participantId);
   const safeParticipantMissionId = participantMissionId ? idSchema.parse(participantMissionId) : null;
-  const assignment = safeParticipantMissionId ? await prisma.participantMission.findFirst({ where: { id: safeParticipantMissionId, participantId: safeParticipantId } }) : await prisma.participantMission.findFirst({ where: { participantId: safeParticipantId, status: ParticipantMissionStatus.ACTIVE }, orderBy: { sequence: 'asc' } });
+  const assignment = safeParticipantMissionId ? await prisma.participantMission.findFirst({ where: { id: safeParticipantMissionId, participantId: safeParticipantId } }) : await getOrCreateActiveAssignment(safeParticipantId);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const code = generateInviteCode();
     try {
@@ -167,6 +168,11 @@ export async function generateInvite(participantId: string, actor = 'admin', par
     }
   }
   throw new Error('Failed to generate a unique invite token after multiple attempts.');
+}
+
+async function defaultFirstMissionId() {
+  const mission = await prisma.mission.findFirst({ where: { active: true }, orderBy: { sequence: 'asc' } });
+  return mission?.id || null;
 }
 
 export async function revokeInvite(inviteId: string, actor = 'admin') {
@@ -375,6 +381,14 @@ async function createAssignmentForMission(tx: Prisma.TransactionClient, particip
   });
   await createProgressForAssignment(tx, assignment.id, missionId);
   return assignment;
+}
+
+async function getOrCreateActiveAssignment(participantId: string) {
+  const existing = await prisma.participantMission.findFirst({ where: { participantId, status: ParticipantMissionStatus.ACTIVE }, orderBy: { sequence: 'asc' } });
+  if (existing) return existing;
+  const mission = await prisma.mission.findFirst({ where: { active: true }, orderBy: { sequence: 'asc' } });
+  if (!mission) return null;
+  return prisma.$transaction(async (tx) => createAssignmentForMission(tx, participantId, mission.id, ParticipantMissionStatus.ACTIVE));
 }
 
 async function createProgressForAssignment(tx: Prisma.TransactionClient, participantMissionId: string, missionId: string) {

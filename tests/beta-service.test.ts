@@ -125,6 +125,21 @@ test('canonical journey has exactly 8 active stages and preserves migrated insta
   assert.equal(migrated.progress.some((row) => row.status === MilestoneStatus.COMPLETE), true);
 });
 
+test('participant creation without explicit mission defaults invite to Mission 01 start page', async () => {
+  await resetDb();
+  await service.ensureCanonicalJourney('test');
+  const participant = await service.createParticipant({ name: 'Jojo', email: 'jojo@example.test' }, 'test');
+  const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id }, include: { mission: true } });
+  assert.equal(assignment.mission.slug, 'get-ready-to-run-certifyd-core');
+  assert.equal(assignment.status, ParticipantMissionStatus.ACTIVE);
+  const { invite } = await service.generateInvite(participant.id, 'test');
+  const source = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: true } } } });
+  assert.equal(source.participantMission?.id, assignment.id);
+  const { buildStaticInviteDto } = await import('../src/lib/public-invite');
+  const publicInvite = buildStaticInviteDto({ ...source, published: true }, 'certifydcreator@gmail.com');
+  assert.equal(publicInvite?.startPath, `/invite/${invite.code}/start/`);
+});
+
 test('participant can advance through missions without overwriting completed history', async () => {
   await resetDb();
   await service.ensureCanonicalJourney('test');
