@@ -37,3 +37,4 @@ label { display:grid; gap:6px; font-weight:800; font-size:13px; color:#cfe4f4; }
 .tree ul { list-style:none; margin:8px 0 0 18px; padding-left:18px; border-left:1px solid var(--line); }
 .note { border-left:3px solid var(--orange); padding:10px 12px; background:#091724; border-radius:8px; }
 @media (max-width: 800px) { .container { width:min(100vw - 24px, 760px); } .grid-2,.grid-3,.form-grid { grid-template-columns:1fr; } h1 { font-size:44px; } .header-inner { align-items:flex-start; flex-direction:column; padding:14px 0; } }
+#ai-prompt { min-height:360px; font:15px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }

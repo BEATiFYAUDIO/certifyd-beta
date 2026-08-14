@@ -1,4 +1,4 @@
-import { type StaticInviteDto, buildMailtoLinks } from './public-invite';
+import { type StaticInviteDto, type StaticMissionStartDto, buildMailtoLinks } from './public-invite';
 
 export function renderPublicHome(): string {
   return renderPage('Certifyd Technical Beta', `
@@ -45,10 +45,38 @@ export function renderPublicInvite(invite: StaticInviteDto): string {
         <p class="muted">${escapeHtml(invite.missionDescription)}</p>
       </div>
       <div class="actions">
-        <a class="button primary" href="${escapeAttribute(links.accept)}">Accept Invitation</a>
+        <a class="button primary" href="${escapeAttribute(invite.startPath || links.accept)}">Accept &amp; Start Mission</a>
         <a class="button secondary" href="${escapeAttribute(links.decline)}">Decline</a>
       </div>
     </section>
+  `);
+}
+
+export function renderMissionStart(start: StaticMissionStartDto): string {
+  const links = buildMailtoLinks(start);
+  return renderPage(`${start.displayName} — ${start.startHeading}`, `
+    <section class="panel hero mission-start">
+      <p class="eyebrow">${escapeHtml(start.missionEyebrow)}</p>
+      <h1>${escapeHtml(start.startHeading)}</h1>
+      <p class="muted lead">${escapeHtml(start.startIntro)}</p>
+      <div class="mission-card">
+        <p class="eyebrow">AI starter prompt</p>
+        <p class="muted">${escapeHtml(start.publicInstructions)}</p>
+        <textarea id="ai-prompt" readonly>${escapeHtml(start.aiPrompt)}</textarea>
+        <div class="actions">
+          <button class="button primary" type="button" id="copy-prompt">Copy AI Prompt</button>
+          <a class="button secondary" href="${escapeAttribute(links.help)}">Contact Darryl</a>
+          <a class="button secondary" href="${escapeAttribute(links.starting)}">Let Darryl know I'm starting</a>
+        </div>
+        <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+      </div>
+      <div class="mission-card">
+        <p class="eyebrow">What success looks like</p>
+        <p class="lead">${escapeHtml(start.successCriteria)}</p>
+      </div>
+      <p><a class="button secondary" href="/invite/${escapeAttribute(start.code)}/">Return to invite</a></p>
+    </section>
+    <script>${copyPromptScript()}</script>
   `);
 }
 
@@ -78,6 +106,10 @@ function escapeAttribute(value: string): string {
   return escapeHtml(value);
 }
 
+function copyPromptScript(): string {
+  return `(function(){var button=document.getElementById('copy-prompt');var prompt=document.getElementById('ai-prompt');var status=document.getElementById('copy-status');if(!button||!prompt)return;button.addEventListener('click',function(){var text=prompt.value;function done(){button.textContent='Copied';if(status)status.textContent='Copied';setTimeout(function(){button.textContent='Copy AI Prompt';if(status)status.textContent='';},1600)}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done).catch(function(){prompt.focus();prompt.select();document.execCommand('copy');done();});return;}prompt.focus();prompt.select();document.execCommand('copy');done();});})();`;
+}
+
 function publicCss(): string {
-  return `:root{color-scheme:dark;--bg:#06131d;--panel:#0d2232;--line:#315064;--text:#f3f8ff;--muted:#bed0df;--orange:#ff9900;--blue:#4aa7d1}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 18% 0,#1b5269 0,#0d2b3b 34%,var(--bg) 76%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}.site-header{border-bottom:1px solid var(--line);background:rgba(5,16,25,.92)}.brand{display:inline-flex;align-items:center;gap:12px;padding:18px clamp(20px,4vw,56px);font-weight:900;font-size:18px;letter-spacing:.02em;color:var(--text);text-decoration:none}.brand img{height:38px;width:auto;display:block}.brand span{color:var(--orange);text-transform:uppercase;font-size:12px;letter-spacing:.18em}.container{width:min(1120px,calc(100vw - 40px));margin:0 auto;padding:clamp(28px,5vw,72px) 0}.panel{background:linear-gradient(145deg,rgba(13,34,50,.92),rgba(8,24,36,.86));border:1px solid var(--line);border-radius:28px;padding:clamp(24px,5vw,58px);box-shadow:0 30px 90px rgba(0,0,0,.28)}.eyebrow{color:var(--orange);font-size:12px;letter-spacing:.24em;text-transform:uppercase;font-weight:900}.hero h1{font-size:clamp(46px,7vw,88px);line-height:.95;letter-spacing:-.06em;margin:12px 0 26px;max-width:920px}.home-hero{position:relative;overflow:hidden}.home-hero:after{content:"";position:absolute;inset:auto -12% -42% 48%;height:280px;background:radial-gradient(circle,rgba(74,167,209,.2),transparent 68%);pointer-events:none}.hero-copy{display:grid;gap:14px;max-width:820px;color:var(--muted);font-size:clamp(18px,2vw,24px);line-height:1.45}.hero-copy p{margin:0}.hero-copy strong{color:var(--text)}.invite-note{margin:26px 0 0;color:#d8e7f3;font-size:15px}.lead{font-size:clamp(19px,2.3vw,27px);line-height:1.45;max-width:800px}.muted{color:var(--muted)}.beta-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:18px}.beta-steps article{padding:22px;border:1px solid rgba(74,167,209,.35);border-radius:22px;background:rgba(7,22,33,.66)}.beta-steps span{display:block;color:var(--orange);font-size:12px;font-weight:900;letter-spacing:.2em;margin-bottom:18px}.beta-steps h2{font-size:clamp(24px,2.6vw,34px);line-height:1;margin:0 0 12px}.beta-steps p{margin:0;color:var(--muted);font-size:17px;line-height:1.45}.mission-card{margin:32px 0;padding:24px;border:1px solid var(--line);border-radius:20px;background:rgba(4,17,27,.54)}.mission-card h2{font-size:clamp(28px,4vw,44px);line-height:1;margin:8px 0 12px}.actions{display:flex;gap:14px;flex-wrap:wrap}.button{display:inline-flex;align-items:center;justify-content:center;min-height:54px;padding:15px 22px;border-radius:999px;font-weight:900;text-decoration:none}.button.primary{background:linear-gradient(135deg,#ffd56a,var(--orange));color:#050505}.button.secondary{border:1px solid var(--line);color:var(--text);background:#132737}@media(max-width:760px){.container{width:min(100vw - 24px,680px);padding:24px 0 36px}.panel{border-radius:22px}.hero h1{font-size:clamp(42px,14vw,64px);letter-spacing:-.055em}.hero-copy{font-size:18px}.beta-steps{grid-template-columns:1fr}.actions{display:grid}.button{width:100%}}`;
+  return `:root{color-scheme:dark;--bg:#06131d;--panel:#0d2232;--line:#315064;--text:#f3f8ff;--muted:#bed0df;--orange:#ff9900;--blue:#4aa7d1}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 18% 0,#1b5269 0,#0d2b3b 34%,var(--bg) 76%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}.site-header{border-bottom:1px solid var(--line);background:rgba(5,16,25,.92)}.brand{display:inline-flex;align-items:center;gap:12px;padding:18px clamp(20px,4vw,56px);font-weight:900;font-size:18px;letter-spacing:.02em;color:var(--text);text-decoration:none}.brand img{height:38px;width:auto;display:block}.brand span{color:var(--orange);text-transform:uppercase;font-size:12px;letter-spacing:.18em}.container{width:min(1120px,calc(100vw - 40px));margin:0 auto;padding:clamp(28px,5vw,72px) 0}.panel{background:linear-gradient(145deg,rgba(13,34,50,.92),rgba(8,24,36,.86));border:1px solid var(--line);border-radius:28px;padding:clamp(24px,5vw,58px);box-shadow:0 30px 90px rgba(0,0,0,.28)}.eyebrow{color:var(--orange);font-size:12px;letter-spacing:.24em;text-transform:uppercase;font-weight:900}.hero h1{font-size:clamp(46px,7vw,88px);line-height:.95;letter-spacing:-.06em;margin:12px 0 26px;max-width:920px}.home-hero{position:relative;overflow:hidden}.home-hero:after{content:"";position:absolute;inset:auto -12% -42% 48%;height:280px;background:radial-gradient(circle,rgba(74,167,209,.2),transparent 68%);pointer-events:none}.hero-copy{display:grid;gap:14px;max-width:820px;color:var(--muted);font-size:clamp(18px,2vw,24px);line-height:1.45}.hero-copy p{margin:0}.hero-copy strong{color:var(--text)}.invite-note{margin:26px 0 0;color:#d8e7f3;font-size:15px}.lead{font-size:clamp(19px,2.3vw,27px);line-height:1.45;max-width:800px}.muted{color:var(--muted)}.beta-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:18px}.beta-steps article{padding:22px;border:1px solid rgba(74,167,209,.35);border-radius:22px;background:rgba(7,22,33,.66)}.beta-steps span{display:block;color:var(--orange);font-size:12px;font-weight:900;letter-spacing:.2em;margin-bottom:18px}.beta-steps h2{font-size:clamp(24px,2.6vw,34px);line-height:1;margin:0 0 12px}.beta-steps p{margin:0;color:var(--muted);font-size:17px;line-height:1.45}.mission-card{margin:32px 0;padding:24px;border:1px solid var(--line);border-radius:20px;background:rgba(4,17,27,.54)}.mission-card h2{font-size:clamp(28px,4vw,44px);line-height:1;margin:8px 0 12px}.actions{display:flex;gap:14px;flex-wrap:wrap}textarea{width:100%;min-height:360px;margin:18px 0;padding:18px;border-radius:18px;border:1px solid var(--line);background:#06131d;color:var(--text);font:15px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;resize:vertical}.copy-status{min-height:22px;color:#9cf3b8;font-weight:900}.button{display:inline-flex;align-items:center;justify-content:center;min-height:54px;padding:15px 22px;border-radius:999px;font-weight:900;text-decoration:none}.button.primary{background:linear-gradient(135deg,#ffd56a,var(--orange));color:#050505}.button.secondary{border:1px solid var(--line);color:var(--text);background:#132737}@media(max-width:760px){.container{width:min(100vw - 24px,680px);padding:24px 0 36px}.panel{border-radius:22px}.hero h1{font-size:clamp(42px,14vw,64px);letter-spacing:-.055em}.hero-copy{font-size:18px}.beta-steps{grid-template-columns:1fr}.actions{display:grid}.button{width:100%}}`;
 }

@@ -26,6 +26,12 @@ export const missionSchema = z.object({
   sequence: z.coerce.number().int().min(0).max(999).default(0),
   shortDescription: z.string().trim().min(1).max(280),
   inviteCopy: z.string().trim().min(1).max(1600),
+  publicStartEnabled: z.coerce.boolean().optional().default(false),
+  startHeading: z.string().trim().max(160).optional().default(''),
+  startIntro: z.string().trim().max(1600).optional().default(''),
+  publicInstructions: z.string().trim().max(2400).optional().default(''),
+  aiStarterPrompt: z.string().trim().max(6000).optional().default(''),
+  successCriteria: z.string().trim().max(1000).optional().default(''),
   active: z.coerce.boolean().default(true),
 });
 

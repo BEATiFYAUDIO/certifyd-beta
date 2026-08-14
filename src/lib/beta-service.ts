@@ -300,8 +300,8 @@ export async function ensureCanonicalJourney(actor = 'system') {
   for (const definition of definitions) {
     const mission = await prisma.mission.upsert({
       where: { slug: definition.slug },
-      update: { name: definition.name, sequence: definition.sequence, shortDescription: definition.shortDescription, inviteCopy: definition.inviteCopy, active: true },
-      create: { name: definition.name, slug: definition.slug, sequence: definition.sequence, shortDescription: definition.shortDescription, inviteCopy: definition.inviteCopy, active: true },
+      update: { name: definition.name, sequence: definition.sequence, shortDescription: definition.shortDescription, inviteCopy: definition.inviteCopy, publicStartEnabled: definition.publicStartEnabled || false, startHeading: definition.startHeading || '', startIntro: definition.startIntro || '', publicInstructions: definition.publicInstructions || '', aiStarterPrompt: definition.aiStarterPrompt || '', successCriteria: definition.successCriteria || '', active: true },
+      create: { name: definition.name, slug: definition.slug, sequence: definition.sequence, shortDescription: definition.shortDescription, inviteCopy: definition.inviteCopy, publicStartEnabled: definition.publicStartEnabled || false, startHeading: definition.startHeading || '', startIntro: definition.startIntro || '', publicInstructions: definition.publicInstructions || '', aiStarterPrompt: definition.aiStarterPrompt || '', successCriteria: definition.successCriteria || '', active: true },
     });
     for (let index = 0; index < definition.milestones.length; index += 1) {
       const title = definition.milestones[index];
@@ -372,6 +372,12 @@ function canonicalJourneyDefinitions() {
       slug: JOURNEY_SLUGS[0],
       shortDescription: 'Get Certifyd Core installed and running on your own machine with the help of your preferred AI coding agent.',
       inviteCopy: 'Your first Certifyd technical beta mission is to get Certifyd Core cloned, installed, configured, and running locally with your preferred AI coding agent.',
+      publicStartEnabled: true,
+      startHeading: 'Install Certifyd Core',
+      startIntro: "You don't need to know how to install Certifyd Core yourself. Start with the AI assistant you already use. Open ChatGPT, Gemini, Claude, Copilot, or another general-purpose AI assistant and paste the prompt below.",
+      publicInstructions: "Use the AI assistant you're already comfortable with. The important part is that it can read the repository documentation and guide you through your local setup.",
+      aiStarterPrompt: '',
+      successCriteria: 'Certifyd Core is running on your computer, the local interface opens, and its basic diagnostics are healthy.',
       milestones: ['Repository cloned', 'Dependencies installed', 'Configuration completed', 'Certifyd Core starts successfully', 'Local interface opens', 'Basic diagnostics healthy'],
     },
     {

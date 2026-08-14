@@ -14,7 +14,7 @@ export default async function InvitePage({ params }: { params: Promise<{ code: s
   const dto = buildStaticInviteDto({ ...invite, published: true }, process.env.BETA_CONTACT_EMAIL || process.env.ADMIN_EMAIL || 'beta-contact@example.test');
   if (!dto) return unavailable();
   const links = buildMailtoLinks(dto);
-  return <main className="main"><div className="container"><section className="panel"><p className="eyebrow">Private Invitation</p><h1>{dto.displayName}, we&apos;d like you to run Certifyd with us.</h1><p className="muted lead">{dto.invitationCopy}</p><div className="panel"><p className="eyebrow">Your Mission</p><h2>{dto.missionTitle}</h2><p className="muted">{dto.missionDescription}</p></div><div className="actions"><a className="button primary" href={links.accept}>Accept Invitation</a><a className="button" href={links.decline}>Decline</a></div></section></div></main>;
+  return <main className="main"><div className="container"><section className="panel"><p className="eyebrow">Private Invitation</p><h1>{dto.displayName}, we&apos;d like you to run Certifyd with us.</h1><p className="muted lead">{dto.invitationCopy}</p><div className="panel"><p className="eyebrow">Your Mission</p><h2>{dto.missionTitle}</h2><p className="muted">{dto.missionDescription}</p></div><div className="actions"><a className="button primary" href={dto.startPath || links.accept}>Accept &amp; Start Mission</a><a className="button" href={links.decline}>Decline</a></div></section></div></main>;
 }
 
 function unavailable() {

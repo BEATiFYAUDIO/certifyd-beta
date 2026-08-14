@@ -3,8 +3,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { InviteStatus } from '@prisma/client';
 import { prisma } from './db';
-import { buildStaticInviteDto, type StaticInviteDto } from './public-invite';
-import { renderPublicHome, renderPublicInvite } from './public-invite-renderer';
+import { buildStaticInviteDto, buildStaticMissionStartDto, type StaticInviteDto } from './public-invite';
+import { renderMissionStart, renderPublicHome, renderPublicInvite } from './public-invite-renderer';
 
 export const PUBLIC_OUTPUT_DIR = path.join(process.cwd(), 'generated-public');
 
@@ -30,6 +30,15 @@ export async function publishPublicSite(contactEmail = publicContactEmail()): Pr
     const inviteDir = path.join(staging, 'invite', invite.code);
     await fs.mkdir(inviteDir, { recursive: true });
     await fs.writeFile(path.join(inviteDir, 'index.html'), renderPublicInvite(invite));
+    const sourceInvite = await findPublishedInviteSource(invite.code);
+    if (sourceInvite) {
+      const start = buildStaticMissionStartDto(sourceInvite, contactEmail);
+      if (start) {
+        const startDir = path.join(inviteDir, 'start');
+        await fs.mkdir(startDir, { recursive: true });
+        await fs.writeFile(path.join(startDir, 'index.html'), renderMissionStart(start));
+      }
+    }
   }
   await scanPublicOutput(staging);
   const stagingHash = await hashDirectory(staging);
@@ -50,6 +59,14 @@ export async function getPublishedInviteDtos(contactEmail = publicContactEmail()
     orderBy: { createdAt: 'desc' },
   });
   return invites.map((invite) => buildStaticInviteDto(invite, contactEmail)).filter((invite): invite is StaticInviteDto => Boolean(invite));
+}
+
+
+async function findPublishedInviteSource(code: string) {
+  return prisma.invite.findUnique({
+    where: { code },
+    include: { participant: true, participantMission: { include: { mission: true } } },
+  });
 }
 
 export async function scanPublicOutput(directory = PUBLIC_OUTPUT_DIR) {

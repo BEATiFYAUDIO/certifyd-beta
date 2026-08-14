@@ -11,6 +11,7 @@ process.env.ADMIN_PASSWORD = 'very-long-local-password';
 process.env.SESSION_PASSWORD = '0123456789abcdef0123456789abcdef';
 process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
 process.env.PUBLIC_SITE_ORIGIN = 'https://beta.certifyd.me';
+process.env.CERTIFYD_CORE_REPOSITORY_URL = 'https://github.com/BEATiFYAUDIO/contentbox';
 
 execFileSync('npx', ['prisma', 'generate'], { cwd: process.cwd(), stdio: 'ignore', env: process.env });
 execFileSync('npx', ['prisma', 'migrate', 'deploy'], { cwd: process.cwd(), stdio: 'ignore', env: process.env });
@@ -64,13 +65,15 @@ test('invite tokens are URL-safe, high entropy and unique', async () => {
 
 
 test('invite URL helpers separate local preview from published public URL', async () => {
-  const { localPreviewInviteUrl, publicInviteUrl } = await import('../src/lib/urls');
+  const { localPreviewInviteUrl, localPreviewMissionStartUrl, publicInviteUrl, publicMissionStartUrl } = await import('../src/lib/urls');
   const code = 'test-public-code';
   const headers = new Map<string, string>([['host', 'localhost:3001']]);
   const localUrl = localPreviewInviteUrl(code, { get: (name: string) => headers.get(name) || null });
   const publicUrl = publicInviteUrl(code);
   assert.equal(localUrl, 'http://localhost:3001/invite/test-public-code/');
   assert.equal(publicUrl, 'https://beta.certifyd.me/invite/test-public-code/');
+  assert.equal(localPreviewMissionStartUrl(code, { get: (name: string) => headers.get(name) || null }), 'http://localhost:3001/invite/test-public-code/start/');
+  assert.equal(publicMissionStartUrl(code), 'https://beta.certifyd.me/invite/test-public-code/start/');
   assert.equal(publicUrl.includes('localhost'), false);
   assert.notEqual(localUrl, publicUrl);
 });
@@ -239,19 +242,67 @@ test('static public invite DTO contains only allowlisted fields and mission-spec
   const fullInvite = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: true } } } });
   const dto = buildStaticInviteDto(fullInvite, 'beta-contact@example.test');
   assert.ok(dto);
-  assert.deepEqual(Object.keys(dto).sort(), ['code', 'contactEmail', 'displayName', 'invitationCopy', 'missionDescription', 'missionTitle'].sort());
+  assert.deepEqual(Object.keys(dto).sort(), ['code', 'contactEmail', 'displayName', 'invitationCopy', 'missionDescription', 'missionTitle', 'startPath'].sort());
   const serialized = JSON.stringify(dto);
   assert.equal(serialized.includes('teddy-private@example.test'), false);
   assert.equal(serialized.includes('Founder note'), false);
   assert.equal(serialized.includes(participant.id), false);
   assert.equal(serialized.includes('static-mailto-one'), false);
   const links = buildMailtoLinks(dto);
-  assert.match(decodeURIComponent(links.accept), /Participant: Teddy Demo/);
-  assert.match(decodeURIComponent(links.accept), /Mission: Mission 2/);
+  assert.equal(links.accept, `/invite/${dto.code}/start/`);
   assert.match(decodeURIComponent(links.decline), /Mission: Mission 2/);
   const html = renderPublicInvite(dto);
   assert.equal(html.includes('Mission 1'), false);
   assert.equal(html.includes('Founder note'), false);
+});
+
+
+test('published Mission 01 invite generates safe static mission start page and AI prompt', async () => {
+  await resetDb();
+  await service.ensureCanonicalJourney('test');
+  process.env.BETA_CONTACT_EMAIL = 'certifydcreator@gmail.com';
+  const { buildStaticMissionStartDto, buildMailtoLinks } = await import('../src/lib/public-invite');
+  const { renderMissionStart } = await import('../src/lib/public-invite-renderer');
+  const mission = await prisma.mission.findUniqueOrThrow({ where: { slug: 'install-certifyd-core' } });
+  const participant = await service.createParticipant({ name: 'Darryl Demo', email: 'darryl-private@example.test', missionId: mission.id, aiAgent: 'Codex' });
+  const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id } });
+  await service.addFounderNote(participant.id, { body: 'Founder note must never publish.', participantMissionId: assignment.id });
+  const { invite } = await service.generateInvite(participant.id, 'test', assignment.id);
+  await service.publishInvite(invite.id);
+  const source = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: true } } } });
+  const start = buildStaticMissionStartDto(source, 'certifydcreator@gmail.com');
+  assert.ok(start);
+  assert.equal(start.missionEyebrow, 'MISSION 01');
+  assert.equal(start.startHeading, 'Install Certifyd Core');
+  assert.match(start.aiPrompt, /technical beta/);
+  assert.match(start.aiPrompt, /https:\/\/github\.com\/BEATiFYAUDIO\/contentbox/);
+  assert.match(start.aiPrompt, /operating system/i);
+  assert.match(start.aiPrompt, /relevant tools/i);
+  assert.match(start.aiPrompt, /repository documentation/i);
+  assert.match(start.aiPrompt, /source of truth/i);
+  assert.match(start.aiPrompt, /appropriate location/i);
+  assert.match(start.aiPrompt, /Configure/i);
+  assert.match(start.aiPrompt, /Start Certifyd Core/i);
+  assert.match(start.aiPrompt, /diagnostics are healthy/i);
+  assert.match(start.aiPrompt, /diagnose the actual error/i);
+  assert.match(start.aiPrompt, /confusing, broken, undocumented/i);
+  assert.equal(start.aiPrompt.includes('/home/'), false);
+  assert.equal(/C:\\/.test(start.aiPrompt), false);
+  assert.equal(start.aiPrompt.includes('darryl-private@example.test'), false);
+  const html = renderMissionStart(start);
+  assert.match(html, /Copy AI Prompt/);
+  assert.match(html, /What success looks like/);
+  assert.match(html, /Contact Darryl/);
+  assert.match(html, /Let Darryl know I(?:&#39;|')m starting/);
+  assert.match(html, /mailto:certifydcreator%40gmail.com/);
+  assert.equal(html.includes('darryl-private@example.test'), false);
+  assert.equal(html.includes('Founder note'), false);
+  assert.equal(html.includes(participant.id), false);
+  assert.equal(html.includes(assignment.id), false);
+  assert.equal(html.includes('participantId'), false);
+  assert.equal(html.includes('networkOrigin'), false);
+  const links = buildMailtoLinks(start);
+  assert.match(links.help, /Mission%2001%20Help/);
 });
 
 test('static publishing omits unpublished invites, removes unpublished pages, and detects no-op publishes', async () => {
@@ -261,7 +312,8 @@ test('static publishing omits unpublished invites, removes unpublished pages, an
   const path = await import('node:path');
   const publisher = await import('../src/lib/static-publisher');
   await fs.rm(publisher.PUBLIC_OUTPUT_DIR, { recursive: true, force: true });
-  const mission = await missionFixture('static-publish');
+  await service.ensureCanonicalJourney('test');
+  const mission = await prisma.mission.findUniqueOrThrow({ where: { slug: 'install-certifyd-core' } });
   const participant = await service.createParticipant({ name: 'Public Demo', email: 'public-demo@example.test', missionId: mission.id });
   const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id } });
   const { publicInviteUrl } = await import('../src/lib/urls');
@@ -273,13 +325,18 @@ test('static publishing omits unpublished invites, removes unpublished pages, an
   assert.equal(result.changed, true);
   assert.equal(result.inviteCount, 0);
   await assert.rejects(() => fs.stat(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'index.html')));
+  await assert.rejects(() => fs.stat(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'start', 'index.html')));
 
   await service.publishInvite(invite.id);
   result = await publisher.publishPublicSite();
   assert.equal(result.changed, true);
   assert.equal(result.inviteCount, 1);
   const inviteHtml = await fs.readFile(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'index.html'), 'utf8');
-  assert.match(inviteHtml, /Accept Invitation/);
+  const startHtml = await fs.readFile(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'start', 'index.html'), 'utf8');
+  assert.match(inviteHtml, /Accept &amp; Start Mission/);
+  assert.match(inviteHtml, new RegExp(`/invite/${invite.code}/start/`));
+  assert.match(startHtml, /Copy AI Prompt/);
+  assert.match(startHtml, /https:\/\/github\.com\/BEATiFYAUDIO\/contentbox/);
   assert.match(inviteHtml, /Decline/);
   assert.match(inviteHtml, /href="mailto:/);
   assert.equal(inviteHtml.includes('href="#"'), false);
@@ -296,6 +353,7 @@ test('static publishing omits unpublished invites, removes unpublished pages, an
   result = await publisher.publishPublicSite();
   assert.equal(result.changed, true);
   await assert.rejects(() => fs.stat(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'index.html')));
+  await assert.rejects(() => fs.stat(path.join(publisher.PUBLIC_OUTPUT_DIR, 'invite', invite.code, 'start', 'index.html')));
 });
 
 
@@ -317,6 +375,23 @@ test('generated public deploy commits only generated-public when static output c
     ['commit', '-m', 'publish beta invite page', '--', 'generated-public'],
     ['push'],
   ]);
+});
+
+
+test('publishing Mission 01 start page fails clearly without repository URL', async () => {
+  await resetDb();
+  await service.ensureCanonicalJourney('test');
+  const previous = process.env.CERTIFYD_CORE_REPOSITORY_URL;
+  delete process.env.CERTIFYD_CORE_REPOSITORY_URL;
+  const { buildStaticMissionStartDto } = await import('../src/lib/public-invite');
+  const mission = await prisma.mission.findUniqueOrThrow({ where: { slug: 'install-certifyd-core' } });
+  const participant = await service.createParticipant({ name: 'Missing Repo', email: 'missing-repo@example.test', missionId: mission.id });
+  const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id } });
+  const { invite } = await service.generateInvite(participant.id, 'test', assignment.id);
+  await service.publishInvite(invite.id);
+  const source = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: true } } } });
+  assert.throws(() => buildStaticMissionStartDto(source, 'beta-contact@example.test'), /CERTIFYD_CORE_REPOSITORY_URL is required/);
+  process.env.CERTIFYD_CORE_REPOSITORY_URL = previous;
 });
 
 test('journey funnel derives completed stage counts', async () => {

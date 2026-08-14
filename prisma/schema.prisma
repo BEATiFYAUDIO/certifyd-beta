@@ -50,6 +50,12 @@ model Mission {
   sequence         Int                  @default(0)
   shortDescription String
   inviteCopy       String
+  publicStartEnabled Boolean            @default(false)
+  startHeading     String               @default("")
+  startIntro       String               @default("")
+  publicInstructions String             @default("")
+  aiStarterPrompt  String               @default("")
+  successCriteria  String               @default("")
   active           Boolean              @default(true)
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
@@ -109,6 +115,7 @@ model ParticipantMission {
   missionId     String
   status        ParticipantMissionStatus     @default(ASSIGNED)
   sequence      Int
+  publicInstructionsOverride String          @default("")
   assignedAt    DateTime                     @default(now())
   startedAt     DateTime?
   completedAt   DateTime?
