@@ -4,7 +4,7 @@ import { ParticipantMissionStatus, ParticipantStatus, MilestoneStatus } from '@p
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getSession, requireAdmin, verifyAdminPassword } from './auth';
-import { acceptInvite, addFounderNote, addMissionMilestone, advanceToNextMission, assignMission, createMission, createParticipant, deleteInvite, ensurePracticeParticipant, generateInvite, publishInvite, regenerateInvite, revokeInvite, unpublishInvite, updateParticipant, updateParticipantMissionStatus, updateParticipantStatus, updateProgress } from './beta-service';
+import { acceptInvite, addFounderNote, addMissionMilestone, advanceToNextMission, assignMission, createMission, createParticipant, deleteInvite, deleteParticipant, ensurePracticeParticipant, generateInvite, publishInvite, regenerateInvite, revokeInvite, unpublishInvite, updateParticipant, updateParticipantMissionStatus, updateParticipantStatus, updateProgress } from './beta-service';
 import { rateLimit } from './rate-limit';
 import { publishAndDeployPublicSite } from './git-publisher';
 import { publicInviteUrl } from './urls';
@@ -50,6 +50,17 @@ export async function updateParticipantAction(formData: FormData) {
   revalidatePath('/admin');
   revalidatePath('/admin/participants');
   revalidatePath(`/admin/participants/${participantId}`);
+}
+
+export async function deleteParticipantAction(formData: FormData) {
+  const admin = await requireAdmin();
+  if (String(formData.get('confirm') || '') !== 'DELETE') throw new Error('Participant deletion requires DELETE confirmation.');
+  const deleted = await deleteParticipant(String(formData.get('participantId')), admin.email);
+  if (deleted?.hadPublishedInvite) await publishAndDeployPublicSite('delete beta participant public invites');
+  revalidatePath('/admin');
+  revalidatePath('/admin/participants');
+  revalidatePath('/admin/invites');
+  redirect('/admin/participants');
 }
 
 export async function assignMissionAction(formData: FormData) {

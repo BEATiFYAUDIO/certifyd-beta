@@ -5,6 +5,7 @@ import { InviteStatus } from '@prisma/client';
 import { prisma } from './db';
 import { buildStaticInviteDto, buildStaticMissionInstallContinuationDto, buildStaticMissionStartDto, type StaticInviteDto } from './public-invite';
 import { renderMissionStart, renderPublicHome, renderPublicInvite } from './public-invite-renderer';
+import { requirePublicAcceptCallbackOrigin } from './urls';
 
 export const PUBLIC_OUTPUT_DIR = path.join(process.cwd(), 'generated-public');
 
@@ -18,6 +19,7 @@ export type PublishResult = {
 export async function publishPublicSite(contactEmail = publicContactEmail()): Promise<PublishResult> {
   const beforeHash = await hashDirectory(PUBLIC_OUTPUT_DIR);
   const invites = await getPublishedInviteDtos(contactEmail);
+  if (invites.length) requirePublicAcceptCallbackOrigin();
   const staging = path.join(process.cwd(), `.generated-public-${crypto.randomBytes(6).toString('hex')}`);
   await fs.rm(staging, { recursive: true, force: true });
   await fs.mkdir(staging, { recursive: true });

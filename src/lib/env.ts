@@ -15,6 +15,7 @@ const envSchema = z.object({
   SESSION_PASSWORD: z.string().min(32),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
   PUBLIC_SITE_ORIGIN: z.string().url().default('https://beta.certifyd.me'),
+  BETA_ACCEPT_ORIGIN: z.string().url().optional(),
   CERTIFYD_CORE_REPOSITORY_URL: z.string().url().optional(),
   CODEX_URL: z.string().url().default('https://openai.com/codex/'),
   CLAUDE_CODE_URL: z.string().url().default('https://claude.com/product/claude-code'),
@@ -32,6 +33,9 @@ const envSchema = z.object({
   if (!env.PUBLIC_SITE_ORIGIN.startsWith('https://')) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['PUBLIC_SITE_ORIGIN'], message: 'PUBLIC_SITE_ORIGIN must use https:// in production' });
   }
+  if ((env.BETA_ACCEPT_ORIGIN || env.NEXT_PUBLIC_APP_URL).startsWith('http://')) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['BETA_ACCEPT_ORIGIN'], message: 'BETA_ACCEPT_ORIGIN or NEXT_PUBLIC_APP_URL must use https:// in production because public invite acceptance posts there' });
+  }
 });
 
 export function getEnv() {
@@ -42,6 +46,7 @@ export function getEnv() {
     SESSION_PASSWORD: process.env.SESSION_PASSWORD,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || 'http://localhost:3000',
     PUBLIC_SITE_ORIGIN: process.env.PUBLIC_SITE_ORIGIN || 'https://beta.certifyd.me',
+    BETA_ACCEPT_ORIGIN: process.env.BETA_ACCEPT_ORIGIN,
     CERTIFYD_CORE_REPOSITORY_URL: process.env.CERTIFYD_CORE_REPOSITORY_URL,
     CODEX_URL: process.env.CODEX_URL || 'https://openai.com/codex/',
     CLAUDE_CODE_URL: process.env.CLAUDE_CODE_URL || 'https://claude.com/product/claude-code',

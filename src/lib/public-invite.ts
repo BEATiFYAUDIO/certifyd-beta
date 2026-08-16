@@ -1,5 +1,6 @@
 import { InviteStatus, type Invite, type Mission, type Participant, type ParticipantMission } from '@prisma/client';
 import { getEnv } from './env';
+import { publicInviteAcceptUrl } from './urls';
 
 export type StaticInviteDto = {
   code: string;
@@ -9,6 +10,8 @@ export type StaticInviteDto = {
   invitationCopy: string;
   contactEmail: string;
   startPath: string | null;
+  acceptUrl: string;
+  acceptReturnPath: string;
 };
 
 export type MissionStartChoice = {
@@ -47,6 +50,7 @@ export function buildStaticInviteDto(invite: InviteWithAssignment, contactEmail:
   if (!invite.published) return null;
   if (invite.status === InviteStatus.REVOKED || invite.status === InviteStatus.EXPIRED) return null;
   const mission = invite.participantMission?.mission;
+  const startPath = mission?.publicStartEnabled ? `/invite/${invite.code}/start/` : null;
   return {
     code: invite.code,
     displayName: invite.participant.name,
@@ -54,7 +58,9 @@ export function buildStaticInviteDto(invite: InviteWithAssignment, contactEmail:
     missionDescription: mission?.shortDescription || 'Run Certifyd Core in a real creator workflow.',
     invitationCopy: mission?.inviteCopy || "We're opening Certifyd Core to a small number of people during our technical beta.",
     contactEmail,
-    startPath: mission?.publicStartEnabled ? `/invite/${invite.code}/start/` : null,
+    startPath,
+    acceptUrl: publicInviteAcceptUrl(invite.code),
+    acceptReturnPath: startPath || `/invite/${invite.code}/`,
   };
 }
 

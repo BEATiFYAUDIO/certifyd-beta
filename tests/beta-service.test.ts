@@ -11,6 +11,7 @@ process.env.ADMIN_PASSWORD = 'very-long-local-password';
 process.env.SESSION_PASSWORD = '0123456789abcdef0123456789abcdef';
 process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
 process.env.PUBLIC_SITE_ORIGIN = 'https://beta.certifyd.me';
+process.env.BETA_ACCEPT_ORIGIN = 'https://admin.beta.certifyd.me';
 process.env.CERTIFYD_CORE_REPOSITORY_URL = 'https://github.com/BEATiFYAUDIO/contentbox';
 process.env.CODEX_URL = 'https://openai.com/codex/';
 process.env.CLAUDE_CODE_URL = 'https://claude.com/product/claude-code';
@@ -251,8 +252,10 @@ test('invite lifecycle is tied to one mission assignment and public field restri
   assert.equal(second.ok, true);
   const accepted = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id } });
   const updatedParticipant = await prisma.participant.findUniqueOrThrow({ where: { id: participant.id } });
+  const updatedAssignment = await prisma.participantMission.findUniqueOrThrow({ where: { id: assignment.id } });
   assert.equal(accepted.status, InviteStatus.ACCEPTED);
-  assert.equal(updatedParticipant.status, ParticipantStatus.ACCEPTED);
+  assert.equal(updatedParticipant.status, ParticipantStatus.ACTIVE);
+  assert.equal(updatedAssignment.status, ParticipantMissionStatus.ACTIVE);
   assert.ok(updatedParticipant.acceptedAt);
 });
 
@@ -290,6 +293,30 @@ test('delete invite removes invite only and preserves participant mission histor
   assert.equal(await prisma.participant.count({ where: { id: participant.id } }), 1);
   assert.equal(await prisma.participantMission.count({ where: { id: assignment.id } }), 1);
   const event = await prisma.auditEvent.findFirst({ where: { participantId: participant.id, action: 'invite.deleted' } });
+  assert.ok(event);
+});
+
+test('delete participant removes participant records and reports published invite cleanup need', async () => {
+  await resetDb();
+  const mission = await missionFixture('delete-participant');
+  const participant = await service.createParticipant({ name: 'Delete Participant Tester', email: 'delete-participant@example.test', missionId: mission.id });
+  const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id } });
+  const { invite } = await service.generateInvite(participant.id, 'test', assignment.id);
+  await service.addFounderNote(participant.id, { body: 'Private note.', participantMissionId: assignment.id }, 'test');
+  await service.publishInvite(invite.id, 'test');
+
+  const deleted = await service.deleteParticipant(participant.id, 'test');
+  const repeated = await service.deleteParticipant(participant.id, 'test');
+  const event = await prisma.auditEvent.findFirst({ where: { action: 'participant.deleted' } });
+
+  assert.ok(deleted);
+  assert.equal(deleted.participant.id, participant.id);
+  assert.equal(deleted.hadPublishedInvite, true);
+  assert.equal(repeated, null);
+  assert.equal(await prisma.participant.count({ where: { id: participant.id } }), 0);
+  assert.equal(await prisma.participantMission.count({ where: { participantId: participant.id } }), 0);
+  assert.equal(await prisma.invite.count({ where: { participantId: participant.id } }), 0);
+  assert.equal(await prisma.founderNote.count({ where: { participantId: participant.id } }), 0);
   assert.ok(event);
 });
 
@@ -341,6 +368,7 @@ test('static public invite DTO contains only allowlisted fields and mission-spec
   const { renderPublicInvite } = await import('../src/lib/public-invite-renderer');
   const m1 = await missionFixture('static-mailto-one', 1);
   const m2 = await missionFixture('static-mailto-two', 2);
+  await prisma.mission.update({ where: { id: m2.id }, data: { publicStartEnabled: true } });
   const participant = await service.createParticipant({ name: 'Teddy Demo', email: 'teddy-private@example.test', missionId: m1.id });
   const a1 = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id, missionId: m1.id } });
   await service.updateParticipantMissionStatus(a1.id, ParticipantMissionStatus.COMPLETED);
@@ -352,7 +380,7 @@ test('static public invite DTO contains only allowlisted fields and mission-spec
   const fullInvite = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: true } } } });
   const dto = buildStaticInviteDto(fullInvite, 'beta-contact@example.test');
   assert.ok(dto);
-  assert.deepEqual(Object.keys(dto).sort(), ['code', 'contactEmail', 'displayName', 'invitationCopy', 'missionDescription', 'missionTitle', 'startPath'].sort());
+  assert.deepEqual(Object.keys(dto).sort(), ['acceptReturnPath', 'acceptUrl', 'code', 'contactEmail', 'displayName', 'invitationCopy', 'missionDescription', 'missionTitle', 'startPath'].sort());
   const serialized = JSON.stringify(dto);
   assert.equal(serialized.includes('teddy-private@example.test'), false);
   assert.equal(serialized.includes('Founder note'), false);
@@ -360,8 +388,12 @@ test('static public invite DTO contains only allowlisted fields and mission-spec
   assert.equal(serialized.includes('static-mailto-one'), false);
   const links = buildMailtoLinks(dto);
   assert.equal(links.accept, `/invite/${dto.code}/start/`);
+  assert.equal(dto.acceptReturnPath, `/invite/${dto.code}/start/`);
+  assert.equal(dto.acceptUrl, `https://admin.beta.certifyd.me/api/invites/${dto.code}/accept`);
   assert.match(decodeURIComponent(links.decline), /Mission: Mission 2/);
   const html = renderPublicInvite(dto);
+  assert.match(html, new RegExp(`method="post" action="https://admin\\.beta\\.certifyd\\.me/api/invites/${dto.code}/accept"`));
+  assert.match(html, new RegExp(`name="returnTo" value="/invite/${dto.code}/start/"`));
   assert.equal(html.includes('Mission 1'), false);
   assert.equal(html.includes('Founder note'), false);
 });

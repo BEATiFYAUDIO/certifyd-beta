@@ -138,6 +138,24 @@ export async function updateParticipant(participantId: string, input: unknown, a
   return participant;
 }
 
+export async function deleteParticipant(participantId: string, actor = 'admin') {
+  const safeParticipantId = idSchema.parse(participantId);
+  const existing = await prisma.participant.findUnique({
+    where: { id: safeParticipantId },
+    include: { invites: true },
+  });
+  if (!existing) return null;
+  const hadPublishedInvite = existing.invites.some((invite) => invite.published);
+  await prisma.participant.delete({ where: { id: safeParticipantId } });
+  await audit(actor, 'participant.deleted', undefined, {
+    participantId: safeParticipantId,
+    email: existing.email,
+    inviteCount: existing.invites.length,
+    hadPublishedInvite,
+  });
+  return { participant: existing, hadPublishedInvite };
+}
+
 export async function assignMission(participantId: string, missionId: string, actor = 'admin') {
   const safeParticipantId = idSchema.parse(participantId);
   const safeMissionId = idSchema.parse(missionId);
@@ -300,7 +318,7 @@ export async function acceptInvite(code: string) {
     }
     const participant = await tx.participant.update({
       where: { id: invite.participantId },
-      data: { status: invite.participant.status === ParticipantStatus.INVITED ? ParticipantStatus.ACCEPTED : invite.participant.status, acceptedAt: invite.participant.acceptedAt || now },
+      data: { status: ParticipantStatus.ACTIVE, acceptedAt: invite.participant.acceptedAt || now },
     });
     if (invite.participantMissionId) {
       const assignment = await tx.participantMission.findUnique({ where: { id: invite.participantMissionId } });
