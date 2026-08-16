@@ -15,3 +15,5 @@ private-exports/
 credentials/
 session-secrets/
 tsconfig.tsbuildinfo
+.vercel
+.env*
