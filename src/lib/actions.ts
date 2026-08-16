@@ -7,7 +7,7 @@ import { getSession, requireAdmin, verifyAdminPassword } from './auth';
 import { acceptInvite, addFounderNote, addMissionMilestone, advanceToNextMission, assignMission, createMission, createParticipant, deleteInvite, deleteParticipant, ensurePracticeParticipant, generateInvite, publishInvite, regenerateInvite, revokeInvite, unpublishInvite, updateParticipant, updateParticipantMissionStatus, updateParticipantStatus, updateProgress } from './beta-service';
 import { rateLimit } from './rate-limit';
 import { publishAndDeployPublicSite } from './git-publisher';
-import { publicInviteUrl } from './urls';
+import { publicInviteUrl, requirePublicAcceptCallbackOrigin } from './urls';
 
 function entries(formData: FormData) { return Object.fromEntries(formData.entries()); }
 
@@ -127,6 +127,11 @@ export async function regenerateInviteAction(formData: FormData) {
 export async function publishInviteAction(formData: FormData) {
   const admin = await requireAdmin();
   const participantId = String(formData.get('participantId'));
+  try {
+    requirePublicAcceptCallbackOrigin();
+  } catch {
+    redirect(`/admin/participants/${participantId}?publishError=accept-origin`);
+  }
   await publishInvite(String(formData.get('inviteId')), admin.email);
   await publishAndDeployPublicSite('publish beta invite page');
   revalidatePath(`/admin/participants/${participantId}`);
