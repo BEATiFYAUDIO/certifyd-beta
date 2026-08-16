@@ -5,9 +5,9 @@ Standalone founder-operated MVP for managing Certifyd technical-beta participant
 ## Architecture
 
 ```text
-LOCAL ADMIN APP
+LOCAL OR VERCEL ADMIN APP
     ↓
-Private local beta data
+Private beta PostgreSQL data
     ↓
 Generate sanitized static invite pages
     ↓
@@ -16,9 +16,17 @@ Git commit/push
 GitHub Pages
     ↓
 https://beta.certifyd.me
+
+PUBLIC INVITE ACCEPT
+    ↓
+Vercel dynamic API
+    ↓
+Same PostgreSQL database
+    ↓
+Participant becomes ACTIVE
 ```
 
-The admin app remains local only. The public site is static only and contains only allowlisted invite content.
+The public invite site remains static and contains only allowlisted invite content. The dynamic admin/API may run locally or on Vercel. If public invite Accept buttons should update dashboard status, the static page must post to a reachable dynamic app origin through `BETA_ACCEPT_ORIGIN`, and that app must use the same PostgreSQL database as the dashboard.
 
 ## Stack
 
@@ -38,16 +46,17 @@ DATABASE_URL="postgresql://certifyd_beta:replace-me@localhost:5432/certifyd_beta
 ADMIN_EMAIL="you@example.com"
 ADMIN_PASSWORD="long-unique-password-or-bcrypt-hash"
 SESSION_PASSWORD="at-least-32-random-characters"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
+NEXT_PUBLIC_APP_URL="http://localhost:3001"
 PUBLIC_SITE_ORIGIN="https://beta.certifyd.me"
+BETA_ACCEPT_ORIGIN="http://localhost:3001"
 CERTIFYD_CORE_REPOSITORY_URL="https://github.com/BEATiFYAUDIO/contentbox"
 BETA_CONTACT_EMAIL="beta-contact@example.com"
 NODE_ENV="development"
 ```
 
-`BETA_CONTACT_EMAIL` is used for the static public Accept/Decline `mailto:` links. If omitted, the app falls back to `ADMIN_EMAIL` locally.
+`BETA_CONTACT_EMAIL` is used for public contact/decline links. If omitted, the app falls back to `ADMIN_EMAIL` locally.
 
-`NEXT_PUBLIC_APP_URL` is the private local admin/preview origin. `PUBLIC_SITE_ORIGIN` is the published GitHub Pages origin used for copied public invite URLs. `CERTIFYD_CORE_REPOSITORY_URL` is the public repository URL inserted into Mission 01 AI handoff prompts. Production startup rejects known development/default passwords and requires both URL origins to use HTTPS.
+`NEXT_PUBLIC_APP_URL` is the dynamic admin/preview app origin. `PUBLIC_SITE_ORIGIN` is the published GitHub Pages origin used for copied public invite URLs. `BETA_ACCEPT_ORIGIN` is the reachable dynamic app origin that static invite pages post to when a tester accepts. In production, set `BETA_ACCEPT_ORIGIN` to the Vercel app URL, not `beta.certifyd.me`, unless `beta.certifyd.me` itself is routed to the dynamic app. `CERTIFYD_CORE_REPOSITORY_URL` is the public repository URL inserted into Mission 01 AI handoff prompts. Production startup rejects known development/default passwords and requires URL origins used at runtime to use HTTPS.
 
 ## Database
 
@@ -91,7 +100,7 @@ npm run db:seed
 npm run dev
 ```
 
-Open `http://localhost:3000` and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+Open `http://localhost:3001` when running with `npm run dev -- -p 3001`, or `http://localhost:3000` with the default Next dev port, and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
 
 ## Admin Workflow
 
@@ -103,8 +112,8 @@ Open `http://localhost:3000` and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
 6. Publish the invite to regenerate `generated-public/`.
 7. Copy the public URL.
 8. Send the invite.
-9. Manually mark the participant `ACCEPTED` or `DECLINED` after receiving email.
-10. Track milestones and founder notes locally.
+9. When the tester clicks Accept, the configured dynamic API marks the invite `ACCEPTED`, the participant `ACTIVE`, and the current mission `ACTIVE`.
+10. Track milestones and founder notes locally or in the deployed admin using the same database.
 11. Create downstream participants when needed.
 12. Unpublish an invite to remove only its static public page.
 
@@ -142,10 +151,12 @@ The GitHub Pages workflow deploys only `generated-public/`.
 
 Static invite pages include:
 
-- `Accept Invitation`
+- `Accept & Start Mission`
 - `Decline`
 
-Both open pre-addressed `mailto:` messages to `BETA_CONTACT_EMAIL`. They do not update the local database. The founder manually marks the participant accepted or declined in local admin.
+`Accept & Start Mission` posts to `${BETA_ACCEPT_ORIGIN}/api/invites/<code>/accept`. That route updates the private database and moves the participant into active beta status. `Decline` remains a pre-addressed contact link.
+
+If `BETA_ACCEPT_ORIGIN` is missing or points to localhost, publishing public invites is blocked because GitHub Pages cannot update dashboard status by itself.
 
 ## Privacy Model
 
@@ -205,6 +216,44 @@ npm audit --omit=dev
 ```
 
 Tests require a reachable PostgreSQL database. Set `TEST_DATABASE_URL` to a disposable database if different from `DATABASE_URL`. Tests create and drop an isolated schema.
+
+
+## Minimal Vercel Dynamic API Deployment
+
+Use Vercel for the private dynamic admin/API and keep GitHub Pages for `https://beta.certifyd.me` static invite pages.
+
+1. In Vercel, import GitHub repository `BEATiFYAUDIO/certifyd-beta`.
+2. Framework preset: Next.js.
+3. Build command: `npm run build`.
+4. Install command: `npm install`.
+5. Add a production PostgreSQL database and set `DATABASE_URL` to that connection string.
+6. Add these Vercel environment variables:
+
+```env
+DATABASE_URL=postgresql://...
+ADMIN_EMAIL=...
+ADMIN_PASSWORD=...
+SESSION_PASSWORD=...
+NEXT_PUBLIC_APP_URL=https://your-certifyd-beta-app.vercel.app
+PUBLIC_SITE_ORIGIN=https://beta.certifyd.me
+BETA_ACCEPT_ORIGIN=https://your-certifyd-beta-app.vercel.app
+BETA_CONTACT_EMAIL=certifydcreator@gmail.com
+CERTIFYD_CORE_REPOSITORY_URL=https://github.com/BEATiFYAUDIO/contentbox
+CODEX_URL=https://openai.com/codex/
+CLAUDE_CODE_URL=https://claude.com/product/claude-code
+NODE_ENV=production
+```
+
+7. After the first deployment, run database migrations against the production database:
+
+```bash
+DATABASE_URL="postgresql://..." npm run db:deploy
+DATABASE_URL="postgresql://..." npm run db:seed
+```
+
+8. Use the Vercel app URL for private admin/API access. Keep `beta.certifyd.me` pointed at GitHub Pages for public static invite pages.
+
+Important: the local dashboard and Vercel dashboard only reflect the same invite status if they use the same `DATABASE_URL`. Publishing static GitHub Pages output still uses local git commands in this MVP; use the local admin for publishing unless a later phase adds GitHub API publishing from Vercel.
 
 ## GitHub Pages
 

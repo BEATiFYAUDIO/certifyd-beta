@@ -7,11 +7,20 @@ const appHost = (() => {
     return 'localhost:3000';
   }
 })();
+const allowedOrigins = new Set([appHost, 'localhost:3000', 'localhost:3001']);
+if (process.env.VERCEL_URL) allowedOrigins.add(process.env.VERCEL_URL);
+if (process.env.BETA_ACCEPT_ORIGIN) {
+  try {
+    allowedOrigins.add(new URL(process.env.BETA_ACCEPT_ORIGIN).host);
+  } catch {
+    // Environment validation handles malformed URLs at runtime.
+  }
+}
 
 const nextConfig = {
   outputFileTracingRoot: new URL('.', import.meta.url).pathname,
   experimental: {
-    serverActions: { allowedOrigins: [appHost, 'localhost:3000'] },
+    serverActions: { allowedOrigins: Array.from(allowedOrigins) },
   },
   async headers() {
     return [
