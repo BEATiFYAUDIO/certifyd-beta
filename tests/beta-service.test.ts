@@ -257,6 +257,9 @@ test('invite lifecycle is tied to one mission assignment and public field restri
   assert.equal(updatedParticipant.status, ParticipantStatus.ACTIVE);
   assert.equal(updatedAssignment.status, ParticipantMissionStatus.ACTIVE);
   assert.ok(updatedParticipant.acceptedAt);
+  const stats = await service.dashboardStats();
+  assert.equal(stats.byStatus.ACCEPTED, 1);
+  assert.equal(stats.byStatus.ACTIVE, 1);
 });
 
 test('revoked, expired and regenerated mission invites cannot be accepted', async () => {
@@ -690,6 +693,22 @@ test('journey funnel derives completed stage counts', async () => {
   const stats = await service.dashboardStats();
   const stage = stats.stageCounts.find((row) => row.slug === 'install-certifyd-core');
   assert.equal(stage?._count.assignments, 1);
+});
+
+test('dashboard invited count includes active accepted participants', async () => {
+  await resetDb();
+  const mission = await missionFixture('dashboard-counts');
+  const invited = await service.createParticipant({ name: 'Invited', email: 'invited@example.test', missionId: mission.id });
+  const active = await service.createParticipant({ name: 'Accepted', email: 'accepted@example.test', missionId: mission.id });
+  const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: active.id } });
+  const { code } = await service.generateInvite(active.id, 'test', assignment.id);
+  await service.acceptInvite(code);
+  await service.updateParticipantStatus(invited.id, ParticipantStatus.ARCHIVED);
+
+  const stats = await service.dashboardStats();
+  assert.equal(stats.byStatus.INVITED, 1);
+  assert.equal(stats.byStatus.ACCEPTED, 1);
+  assert.equal(stats.byStatus.ACTIVE, 1);
 });
 
 test('backup command creates a local gitignored dump file', async () => {

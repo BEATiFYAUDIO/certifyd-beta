@@ -356,6 +356,17 @@ export async function addFounderNote(participantId: string, input: unknown, acto
 export async function dashboardStats() {
   const counts = await prisma.participant.groupBy({ by: ['status'], _count: true });
   const byStatus = Object.fromEntries(counts.map((row) => [row.status, row._count]));
+  byStatus[ParticipantStatus.INVITED] = await prisma.participant.count({
+    where: { status: { not: ParticipantStatus.ARCHIVED } },
+  });
+  byStatus[ParticipantStatus.ACCEPTED] = await prisma.participant.count({
+    where: {
+      OR: [
+        { acceptedAt: { not: null } },
+        { invites: { some: { status: InviteStatus.ACCEPTED } } },
+      ],
+    },
+  });
   const stalled = await prisma.participant.findMany({ where: { status: ParticipantStatus.STALLED }, orderBy: { updatedAt: 'asc' }, take: 10 });
   const stageCounts = await prisma.mission.findMany({ where: { active: true }, orderBy: { sequence: 'asc' }, include: { _count: { select: { assignments: { where: { status: ParticipantMissionStatus.COMPLETED } } } } } });
   const blockedAssignments = await prisma.participantMission.findMany({ where: { status: ParticipantMissionStatus.BLOCKED }, include: { participant: true, mission: true }, orderBy: { updatedAt: 'asc' }, take: 10 });
