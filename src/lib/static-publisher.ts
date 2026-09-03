@@ -83,6 +83,9 @@ async function findPublishedInviteSource(code: string) {
 export async function scanPublicOutput(directory = PUBLIC_OUTPUT_DIR) {
   const files = await listFiles(directory);
   const forbiddenFilePatterns = [/\.env/i, /\.db$/i, /\.sqlite/i, /backup/i, /credential/i, /secret/i, /session/i];
+  const publicSafeContentPatterns = [
+    /Make sure you know your Mac administrator password before starting/i,
+  ];
   const forbiddenContentPatterns = [
     /founder\s*notes?/i,
     /participantId/i,
@@ -99,7 +102,8 @@ export async function scanPublicOutput(directory = PUBLIC_OUTPUT_DIR) {
     const relative = path.relative(directory, file);
     if (forbiddenFilePatterns.some((pattern) => pattern.test(relative))) throw new Error(`Public output contains forbidden file: ${relative}`);
     const content = await fs.readFile(file, 'utf8');
-    const matched = forbiddenContentPatterns.find((pattern) => pattern.test(content));
+    const sanitizedContent = publicSafeContentPatterns.reduce((value, pattern) => value.replace(pattern, ''), content);
+    const matched = forbiddenContentPatterns.find((pattern) => pattern.test(sanitizedContent));
     if (matched) throw new Error(`Public output privacy scan failed for ${relative}: ${matched}`);
   }
   return { ok: true, files: files.length };

@@ -118,7 +118,7 @@ export function buildStaticMissionInstallContinuationDto(invite: InviteWithAssig
     successCriteria: mission.successCriteria.trim() || defaultSuccessCriteria(mission.slug),
     contactEmail,
     choices: [],
-    sections: [],
+    sections: buildMissionSections(mission.slug),
     repositoryUrl,
     continuationPath: null,
     continuationLabel: null,
@@ -147,18 +147,26 @@ Start by reading the current Certifyd Core documentation. Treat the repository d
 
 Then inspect my current Certifyd Core and network configuration before giving instructions.
 
-Guide me through the documented Cloudflare Tunnel, public hostname and DNS process one step at a time.
+Guide me through the documented Cloudflare Tunnel, domain/DNS, public hostname and Core public-origin setup process one step at a time.
 
 Help me:
 
 1. Confirm my local Certifyd Core installation is running.
-2. Confirm I have access to the relevant Cloudflare account and domain.
-3. Follow the Certifyd Core documentation for Cloudflare Tunnel and public hostname setup.
-4. Connect only the intended public Certifyd surfaces to the web.
-5. Avoid exposing private, dashboard, admin, diagnostics, credential or operator routes publicly.
-6. Verify HTTPS.
-7. Verify the public Certifyd endpoint from outside my machine.
-8. Probe private/admin routes externally and confirm they are not reachable.
+2. Confirm I control a domain. I do not need an existing website.
+3. Confirm or create access to the relevant Cloudflare account.
+4. Add or use the domain in Cloudflare.
+5. Follow the Certifyd Core documentation for Cloudflare Tunnel and public hostname setup.
+6. Choose a public hostname or subdomain, such as core.artist.com.
+7. Configure DNS/public hostname routing.
+8. Obtain a connector token or use existing Cloudflare tunnel credentials.
+9. Save the public hostname and tunnel details in the existing Certifyd Core configuration.
+10. Start public sharing / named tunnel using Core's existing functionality.
+11. Connect only the intended public Certifyd surfaces to the web.
+12. Avoid exposing private, dashboard, admin, diagnostics, credential or operator routes publicly.
+13. Verify HTTPS.
+14. Verify the public Certifyd endpoint from outside my machine.
+15. Probe private/admin routes externally and confirm they are not reachable.
+16. Confirm Core reports named mode online / namedReady: true.
 
 Do not make destructive DNS, tunnel, credential or routing changes without explaining them first.
 
@@ -216,6 +224,14 @@ function buildMissionChoices(slug: string): MissionStartChoice[] {
 }
 
 function buildMissionSections(slug: string): { heading: string; body: string }[] {
+  if (slug === 'install-certifyd-core') {
+    return [
+      {
+        heading: 'Mac users:',
+        body: "Certifyd Core may require Apple's Xcode Command Line Tools during installation. Make sure you know your Mac administrator password before starting. You should not need to install the full Xcode application.",
+      },
+    ];
+  }
   if (slug !== 'get-ready-to-run-certifyd-core') return [];
   return [
     {
@@ -235,13 +251,13 @@ function buildMissionSections(slug: string): { heading: string; body: string }[]
 
 function defaultPublicInstructions(slug: string) {
   if (slug === 'get-ready-to-run-certifyd-core') return 'Choose the operating path that fits how you already work. AI is recommended but optional.';
-  if (slug === 'connect-core-to-web') return 'Use your AI coding agent or the command line to follow the current Certifyd Core documentation for Cloudflare Tunnel, DNS and public-route verification.';
+  if (slug === 'connect-core-to-web') return 'Use your AI coding agent or the command line to follow the current Certifyd Core documentation for Cloudflare Tunnel, domain/DNS, public hostname, Core public-origin configuration and public-route verification.';
   return "Use the AI assistant you're already comfortable with. The important part is that it can read the repository documentation and guide you through your local setup.";
 }
 
 function defaultSuccessCriteria(slug: string) {
   if (slug === 'get-ready-to-run-certifyd-core') return "You either have an AI coding agent open, signed in and able to work with local files and commands, or you're comfortable doing those tasks yourself from the command line.";
-  if (slug === 'connect-core-to-web') return 'Your public Certifyd page is reachable over HTTPS from the web, and private/admin routes are not reachable publicly.';
+  if (slug === 'connect-core-to-web') return 'Your public Certifyd page is reachable over HTTPS from a hostname you control, private/admin routes are not reachable publicly, and Core reports named mode online / namedReady: true.';
   return 'Certifyd Core is running on your computer, the local interface opens, and its basic diagnostics are healthy.';
 }
 

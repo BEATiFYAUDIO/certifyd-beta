@@ -540,6 +540,12 @@ test('published Mission 02 invite generates safe install start page and AI promp
   assert.equal(start.aiPrompt.includes('darryl-private@example.test'), false);
   const html = renderMissionStart(start);
   assert.match(html, /AI coding agent path/);
+  assert.match(html, /Mac users:/);
+  assert.match(html, /Certifyd Core may require Apple(?:&#39;|')s Xcode Command Line Tools during installation/);
+  assert.match(html, /Make sure you know your Mac administrator password before starting/);
+  assert.match(html, /You should not need to install the full Xcode application/);
+  assert.equal(html.indexOf('Mac users:') < html.indexOf('AI coding agent path'), true);
+  assert.equal(html.indexOf('Mac users:') < html.indexOf('Prefer the command line?'), true);
   assert.match(html, /Copy Certifyd Setup Prompt/);
   assert.match(html, /Open Core Repository/);
   assert.match(html, /Prefer the command line\?/);
@@ -561,18 +567,24 @@ test('published Mission 02 invite generates safe install start page and AI promp
   assert.match(decodeURIComponent(links.help), /Mission 02 Help — Install Certifyd Core/);
 });
 
-test('Mission 04 start page covers Cloudflare DNS HTTPS and private route verification', async () => {
+test('Mission 04 start page covers controlled domain Cloudflare DNS Core config namedReady and private route verification', async () => {
   await resetDb();
   await service.ensureCanonicalJourney('test');
   const { buildStaticMissionStartDto } = await import('../src/lib/public-invite');
   const { renderMissionStart } = await import('../src/lib/public-invite-renderer');
   const mission = await prisma.mission.findUniqueOrThrow({ where: { slug: 'connect-core-to-web' }, include: { milestones: { where: { active: true }, orderBy: { sortOrder: 'asc' } } } });
   assert.equal(mission.sequence, 4);
+  assert.equal(mission.milestones.some((milestone) => /Domain control confirmed/.test(milestone.title)), true);
+  assert.equal(mission.milestones.some((milestone) => /website not required/i.test(milestone.title)), true);
   assert.equal(mission.milestones.some((milestone) => /Cloudflare Tunnel/.test(milestone.title)), true);
   assert.equal(mission.milestones.some((milestone) => /DNS/.test(milestone.title)), true);
+  assert.equal(mission.milestones.some((milestone) => /Connector token|tunnel credentials/.test(milestone.title)), true);
+  assert.equal(mission.milestones.some((milestone) => /saved in Certifyd Core/.test(milestone.title)), true);
+  assert.equal(mission.milestones.some((milestone) => /Named tunnel|public sharing/.test(milestone.title)), true);
   assert.equal(mission.milestones.some((milestone) => /HTTPS/.test(milestone.title)), true);
   assert.equal(mission.milestones.some((milestone) => /Public Certifyd page reachable/.test(milestone.title)), true);
   assert.equal(mission.milestones.some((milestone) => /Private\/admin routes/.test(milestone.title)), true);
+  assert.equal(mission.milestones.some((milestone) => /namedReady: true/.test(milestone.title)), true);
   const participant = await service.createParticipant({ name: 'Cloudflare Demo', email: 'cloudflare-private@example.test', missionId: mission.id });
   const assignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id } });
   const { invite } = await service.generateInvite(participant.id, 'test', assignment.id);
@@ -581,11 +593,17 @@ test('Mission 04 start page covers Cloudflare DNS HTTPS and private route verifi
   const start = buildStaticMissionStartDto(source, 'certifydcreator@gmail.com');
   assert.ok(start);
   assert.equal(start.missionEyebrow, 'MISSION 04');
+  assert.match(start.aiPrompt, /control a domain/i);
+  assert.match(start.aiPrompt, /do not need an existing website/i);
   assert.match(start.aiPrompt, /Cloudflare Tunnel/);
   assert.match(start.aiPrompt, /public hostname/);
+  assert.match(start.aiPrompt, /core\.artist\.com/);
+  assert.match(start.aiPrompt, /connector token|tunnel credentials/i);
+  assert.match(start.aiPrompt, /Certifyd Core configuration/);
   assert.match(start.aiPrompt, /DNS/);
   assert.match(start.aiPrompt, /Verify HTTPS/);
   assert.match(start.aiPrompt,  /private\/admin routes/i);
+  assert.match(start.aiPrompt, /namedReady: true/);
   assert.match(start.aiPrompt, /repository documentation|documentation as the source of truth/i);
   const html = renderMissionStart(start);
   assert.match(html, /Connect Your Core to the Web/);
