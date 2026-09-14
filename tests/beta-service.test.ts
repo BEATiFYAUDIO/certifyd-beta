@@ -141,6 +141,54 @@ test('participant creation without explicit mission defaults invite to Mission 0
   assert.equal(publicInvite?.startPath, `/invite/${invite.code}/start/`);
 });
 
+test('Mission 03 invite is public-start enabled and renders an actionable setup page', async () => {
+  await resetDb();
+  process.env.BETA_CONTACT_EMAIL = 'certifydcreator@gmail.com';
+  await service.ensureCanonicalJourney('test');
+  const install = await prisma.mission.findUniqueOrThrow({ where: { slug: 'install-certifyd-core' } });
+  const participant = await service.createParticipant({ name: 'Vassal Benford', email: 'vassal@example.test', missionId: install.id, aiAgent: 'Codex' });
+  const installAssignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id, missionId: install.id } });
+  await service.updateParticipantMissionStatus(installAssignment.id, ParticipantMissionStatus.COMPLETED, 'test');
+  await service.advanceToNextMission(participant.id, 'test');
+  const setupAssignment = await prisma.participantMission.findFirstOrThrow({ where: { participantId: participant.id, status: ParticipantMissionStatus.ACTIVE }, include: { mission: true } });
+  assert.equal(setupAssignment.mission.slug, 'set-up-your-core');
+  assert.equal(setupAssignment.mission.publicStartEnabled, true);
+
+  const { invite } = await service.generateInvite(participant.id, 'test', setupAssignment.id);
+  await service.publishInvite(invite.id, 'test');
+  const source = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: true } } } });
+  const { buildStaticInviteDto, buildStaticMissionStartDto } = await import('../src/lib/public-invite');
+  const { renderPublicInvite, renderMissionStart } = await import('../src/lib/public-invite-renderer');
+  const dto = buildStaticInviteDto(source, 'certifydcreator@gmail.com');
+  assert.ok(dto);
+  assert.equal(dto.missionTitle, '03 — Set Up Your Core');
+  assert.equal(dto.startPath, `/invite/${invite.code}/start/`);
+  assert.equal(dto.acceptReturnPath, `/invite/${invite.code}/start/`);
+  const inviteHtml = renderPublicInvite(dto);
+  assert.match(inviteHtml, /Accept &amp; Start Mission/);
+  assert.equal(inviteHtml.includes('Contact Darryl</a>\n        <a class="button secondary"'), false);
+
+  const start = buildStaticMissionStartDto(source, 'certifydcreator@gmail.com');
+  assert.ok(start);
+  assert.equal(start.missionEyebrow, 'MISSION 03');
+  assert.equal(start.startHeading, 'Set Up Your Core');
+  assert.equal(start.choices.length, 1);
+  assert.equal(start.choices[0].label, 'Watch the setup walkthrough');
+  assert.equal(start.choices[0].href, 'https://youtu.be/aqLdPcvvf6k?si=KFRvWOz5O8JgUUa4');
+  assert.equal(start.aiPrompt, '');
+  assert.equal(start.repositoryUrl, null);
+  const startHtml = renderMissionStart(start);
+  assert.match(startHtml, /Watch the setup walkthrough/);
+  assert.match(startHtml, /Open Setup Video/);
+  assert.match(startHtml, /https:\/\/youtu\.be\/aqLdPcvvf6k\?si=KFRvWOz5O8JgUUa4/);
+  assert.equal(startHtml.includes('AI coding agent path'), false);
+  assert.equal(startHtml.includes('Copy Certifyd Setup Prompt'), false);
+  assert.equal(startHtml.includes('Open Core Repository'), false);
+  assert.match(startHtml, /Your local identity\/profile, required services, commerce configuration and Core settings have been reviewed/);
+  assert.equal(startHtml.includes('vassal@example.test'), false);
+  assert.equal(startHtml.includes(participant.id), false);
+});
+
 test('participant creation with duplicate email reuses existing participant without crashing', async () => {
   await resetDb();
   const mission = await missionFixture('duplicate-email-mission');

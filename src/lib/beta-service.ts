@@ -518,6 +518,11 @@ function canonicalJourneyDefinitions(): CanonicalMissionDefinition[] {
       slug: JOURNEY_SLUGS[2],
       shortDescription: 'Configure your local Certifyd Core installation for real use.',
       inviteCopy: 'Your next Certifyd technical beta mission is to configure your local Certifyd Core installation for real use before connecting it publicly.',
+      publicStartEnabled: true,
+      startHeading: 'Set Up Your Core',
+      startIntro: 'Configure your local Certifyd Core installation for real use before connecting it publicly.',
+      publicInstructions: 'Watch the setup walkthrough, then work through the Mission 03 checklist in your local Certifyd Core dashboard.',
+      successCriteria: 'Your local identity/profile, required services, commerce configuration and Core settings have been reviewed, and Core is ready to connect publicly in the next mission.',
       milestones: ['Identity/profile established', 'Required local services verified', 'Commerce configuration reviewed', 'Local Core configuration verified', 'Core ready to connect publicly'],
     },
     {

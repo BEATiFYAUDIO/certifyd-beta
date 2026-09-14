@@ -2,6 +2,8 @@ import { InviteStatus, type Invite, type Mission, type Participant, type Partici
 import { getEnv } from './env';
 import { publicInviteAcceptUrl } from './urls';
 
+const MISSION_03_SETUP_VIDEO_URL = 'https://youtu.be/aqLdPcvvf6k?si=KFRvWOz5O8JgUUa4';
+
 export type StaticInviteDto = {
   code: string;
   displayName: string;
@@ -71,7 +73,7 @@ export function buildStaticMissionStartDto(invite: InviteWithAssignment, contact
   if (!assignment) return null;
   const mission = assignment.mission;
   if (!mission.publicStartEnabled) return null;
-  const repositoryUrl = mission.slug === 'get-ready-to-run-certifyd-core' ? null : certifydCoreRepositoryUrl();
+  const repositoryUrl = missionUsesRepositoryPrompt(mission.slug) ? certifydCoreRepositoryUrl() : null;
   const publicInstructions = assignment.publicInstructionsOverride.trim() || mission.publicInstructions.trim() || defaultPublicInstructions(mission.slug);
   const missionTitle = mission.name;
   const startHeading = mission.startHeading.trim() || stripMissionNumber(missionTitle);
@@ -213,6 +215,16 @@ export function missionExternalLinks() {
 }
 
 function buildMissionChoices(slug: string): MissionStartChoice[] {
+  if (slug === 'set-up-your-core') {
+    return [
+      {
+        label: 'Watch the setup walkthrough',
+        actionLabel: 'Open Setup Video',
+        href: MISSION_03_SETUP_VIDEO_URL,
+        copy: 'Start with the Mission 03 setup walkthrough, then work through the checklist in your local Core dashboard.',
+      },
+    ];
+  }
   if (slug !== 'get-ready-to-run-certifyd-core') return [];
   const { codexUrl, claudeCodeUrl } = missionExternalLinks();
   return [
@@ -221,6 +233,10 @@ function buildMissionChoices(slug: string): MissionStartChoice[] {
     { label: 'I already use another coding agent', copy: "That's fine. It needs to be able to work with local files and run commands on your computer." },
     { label: "I'm comfortable with the command line", copy: "You can continue without an AI agent if you're comfortable cloning repositories, installing dependencies, editing configuration, running services, reading logs and troubleshooting from the terminal." },
   ];
+}
+
+function missionUsesRepositoryPrompt(slug: string) {
+  return slug === 'install-certifyd-core' || slug === 'connect-core-to-web';
 }
 
 function buildMissionSections(slug: string): { heading: string; body: string }[] {

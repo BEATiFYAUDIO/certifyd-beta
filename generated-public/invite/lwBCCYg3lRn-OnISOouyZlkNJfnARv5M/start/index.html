@@ -18,52 +18,18 @@
       
       
       <div class="choice-grid">
-        <article class="mission-card choice-card"><h2>Watch the setup walkthrough</h2><p class="muted">Start with the Mission 03 setup walkthrough, then use the prompt below with your AI coding agent to verify your local Core configuration.</p><a class="button secondary" href="https://youtu.be/aqLdPcvvf6k?si=KFRvWOz5O8JgUUa4" target="_blank" rel="noopener noreferrer">Open Setup Video</a></article>
+        <article class="mission-card choice-card"><h2>Watch the setup walkthrough</h2><p class="muted">Start with the Mission 03 setup walkthrough, then work through the checklist in your local Core dashboard.</p><a class="button secondary" href="https://youtu.be/aqLdPcvvf6k?si=KFRvWOz5O8JgUUa4" target="_blank" rel="noopener noreferrer">Open Setup Video</a></article>
       </div>
   
       
       <div class="mission-card">
-        <p class="eyebrow">AI coding agent path</p>
-        <p class="muted">Use your AI coding agent or the command line to inspect your running Core installation, confirm the required local services, review identity/profile setup, and verify the local configuration before moving to public connection.</p>
-        <textarea id="ai-prompt" readonly>I am participating in the Certifyd Core technical beta. I have Certifyd Core installed and running locally, and I need help with Mission 03: Set Up Your Core.
-
-The Certifyd Core repository and documentation are:
-https://github.com/BEATiFYAUDIO/contentbox
-
-Start by reading the current Certifyd Core documentation. Treat the repository documentation and my current local installation as the source of truth.
-
-Do not reinstall from scratch unless the existing installation is missing or broken.
-
-Help me:
-
-1. Confirm Certifyd Core is running locally.
-2. Confirm the local dashboard/API addresses that are actually working on this machine.
-3. Inspect the current local configuration without exposing secrets.
-4. Confirm my identity/profile setup is present or guide me through the intended setup path.
-5. Verify required local services are healthy.
-6. Review commerce configuration at a high level without making live payments.
-7. Verify local Core configuration is ready for real use.
-8. Identify anything that must be fixed before connecting Core publicly.
-
-Do not make destructive changes, rotate credentials, expose private keys, or change network/public routing without explaining the change first.
-
-If something fails, diagnose the actual error before trying unrelated alternatives.
-
-Keep track of anything confusing, broken, undocumented, unexpectedly manual, or requiring intervention so I can report it back to the Certifyd team.</textarea>
+        <p class="eyebrow">Agent ready?</p>
+        <p class="lead">Watch the setup walkthrough, then work through the Mission 03 checklist in your local Certifyd Core dashboard.</p>
         <div class="actions">
-          <button class="button primary" type="button" id="copy-prompt">Copy Certifyd Setup Prompt</button>
-          <a class="button secondary" href="https://github.com/BEATiFYAUDIO/contentbox" target="_blank" rel="noopener noreferrer">Open Core Repository</a>
-        </div>
-        <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
-      </div>
-      <div class="mission-card">
-        <p class="eyebrow">Prefer the command line?</p>
-        <p class="lead muted">Open the Certifyd Core repository and follow the installation documentation directly.</p>
-        <div class="actions">
-          <a class="button secondary" href="https://github.com/BEATiFYAUDIO/contentbox" target="_blank" rel="noopener noreferrer">Open Core Repository</a>
+          
           <a class="button secondary" href="mailto:certifydcreator%40gmail.com?subject=Certifyd%20Beta%20%E2%80%94%20Mission%2003%20Help%20%E2%80%94%20Set%20Up%20Your%20Core%20%E2%80%94%20Vassal%20Benford%20%E2%80%94%20lwBCCYg3lRn-OnISOouyZlkNJfnARv5M&amp;body=I&#39;m%20working%20through%2003%20%E2%80%94%20Set%20Up%20Your%20Core%20and%20need%20some%20help.%0A%0AParticipant%3A%20Vassal%20Benford%0AInvite%3A%20lwBCCYg3lRn-OnISOouyZlkNJfnARv5M">Contact Darryl</a>
         </div>
-        <p class="muted support-note">Use Contact Darryl if setup is unclear, your agent cannot continue, or you hit a real blocker.</p>
+        <p class="muted support-note">Use Contact Darryl only if something is unclear, your AI agent will not work, or you need white-glove help.</p>
       </div>
   
       <div class="mission-card">
@@ -73,7 +39,7 @@ Keep track of anything confusing, broken, undocumented, unexpectedly manual, or 
       </div>
       <p><a class="button secondary" href="/invite/lwBCCYg3lRn-OnISOouyZlkNJfnARv5M/">Return to invite</a></p>
     </section>
-    <script>(function(){var button=document.getElementById('copy-prompt');var prompt=document.getElementById('ai-prompt');var status=document.getElementById('copy-status');if(!button||!prompt)return;button.addEventListener('click',function(){var text=prompt.value;function done(){button.textContent='Copied';if(status)status.textContent='Copied';setTimeout(function(){button.textContent='Copy Certifyd Setup Prompt';if(status)status.textContent='';},1600)}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done).catch(function(){prompt.focus();prompt.select();document.execCommand('copy');done();});return;}prompt.focus();prompt.select();document.execCommand('copy');done();});})();</script>
+    
   </main>
 </body>
 </html>
