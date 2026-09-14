@@ -1,4 +1,4 @@
-import { InviteStatus, type Invite, type Mission, type Participant, type ParticipantMission } from '@prisma/client';
+import { InviteStatus, type Invite, type Mission, type MissionMilestone, type Participant, type ParticipantMission } from '@prisma/client';
 import { getEnv } from './env';
 import { publicInviteAcceptUrl } from './urls';
 
@@ -38,6 +38,7 @@ export type StaticMissionStartDto = {
   contactEmail: string;
   choices: MissionStartChoice[];
   sections: { heading: string; body: string }[];
+  steps: string[];
   repositoryUrl: string | null;
   continuationPath: string | null;
   continuationLabel: string | null;
@@ -46,7 +47,7 @@ export type StaticMissionStartDto = {
 
 export type MailtoLinks = { accept: string; decline: string; help: string; starting: string };
 
-type InviteWithAssignment = Invite & { participant: Participant; participantMission: (ParticipantMission & { mission: Mission }) | null };
+type InviteWithAssignment = Invite & { participant: Participant; participantMission: (ParticipantMission & { mission: Mission & { milestones?: MissionMilestone[] } }) | null };
 
 export function buildStaticInviteDto(invite: InviteWithAssignment, contactEmail: string): StaticInviteDto | null {
   if (!invite.published) return null;
@@ -92,6 +93,7 @@ export function buildStaticMissionStartDto(invite: InviteWithAssignment, contact
     contactEmail,
     choices: buildMissionChoices(mission.slug),
     sections: buildMissionSections(mission.slug),
+    steps: publicMissionSteps(mission),
     repositoryUrl,
     continuationPath: mission.slug === 'get-ready-to-run-certifyd-core' ? `/invite/${invite.code}/install/` : null,
     continuationLabel: mission.slug === 'get-ready-to-run-certifyd-core' ? 'Continue — Install Certifyd Core' : null,
@@ -121,6 +123,7 @@ export function buildStaticMissionInstallContinuationDto(invite: InviteWithAssig
     contactEmail,
     choices: [],
     sections: buildMissionSections(mission.slug),
+    steps: publicMissionSteps(mission),
     repositoryUrl,
     continuationPath: null,
     continuationLabel: null,
@@ -237,6 +240,13 @@ function buildMissionChoices(slug: string): MissionStartChoice[] {
 
 function missionUsesRepositoryPrompt(slug: string) {
   return slug === 'install-certifyd-core' || slug === 'connect-core-to-web';
+}
+
+function publicMissionSteps(mission: Mission & { milestones?: MissionMilestone[] }) {
+  return (mission.milestones || [])
+    .filter((milestone) => milestone.active)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((milestone) => milestone.title);
 }
 
 function buildMissionSections(slug: string): { heading: string; body: string }[] {

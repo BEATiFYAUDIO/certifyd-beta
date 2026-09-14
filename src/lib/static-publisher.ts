@@ -66,7 +66,7 @@ export async function publishPublicSite(contactEmail = publicContactEmail()): Pr
 export async function getPublishedInviteDtos(contactEmail = publicContactEmail()): Promise<StaticInviteDto[]> {
   const invites = await prisma.invite.findMany({
     where: { published: true, status: { notIn: [InviteStatus.REVOKED, InviteStatus.EXPIRED] } },
-    include: { participant: true, participantMission: { include: { mission: true } } },
+    include: { participant: true, participantMission: { include: { mission: { include: { milestones: { where: { active: true }, orderBy: { sortOrder: 'asc' } } } } } } },
     orderBy: { createdAt: 'desc' },
   });
   return invites.map((invite) => buildStaticInviteDto(invite, contactEmail)).filter((invite): invite is StaticInviteDto => Boolean(invite));
@@ -76,7 +76,7 @@ export async function getPublishedInviteDtos(contactEmail = publicContactEmail()
 async function findPublishedInviteSource(code: string) {
   return prisma.invite.findUnique({
     where: { code },
-    include: { participant: true, participantMission: { include: { mission: true } } },
+    include: { participant: true, participantMission: { include: { mission: { include: { milestones: { where: { active: true }, orderBy: { sortOrder: 'asc' } } } } } } },
   });
 }
 

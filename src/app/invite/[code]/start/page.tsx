@@ -10,7 +10,7 @@ export default async function InviteStartPage({ params }: { params: Promise<{ co
   const routeParams = await params;
   const parsed = inviteCodeSchema.safeParse(routeParams.code);
   if (!parsed.success) return unavailable();
-  const invite = await prisma.invite.findFirst({ where: { code: parsed.data }, include: { participant: true, participantMission: { include: { mission: true } } } });
+  const invite = await prisma.invite.findFirst({ where: { code: parsed.data }, include: { participant: true, participantMission: { include: { mission: { include: { milestones: { where: { active: true }, orderBy: { sortOrder: 'asc' } } } } } } } });
   if (!invite || invite.status === InviteStatus.REVOKED || invite.status === InviteStatus.EXPIRED) return unavailable();
   const dto = buildStaticMissionStartDto({ ...invite, published: true }, process.env.BETA_CONTACT_EMAIL || process.env.ADMIN_EMAIL || 'beta-contact@example.test');
   if (!dto) return unavailable();

@@ -134,7 +134,7 @@ test('participant creation without explicit mission defaults invite to Mission 0
   assert.equal(assignment.mission.slug, 'get-ready-to-run-certifyd-core');
   assert.equal(assignment.status, ParticipantMissionStatus.ACTIVE);
   const { invite } = await service.generateInvite(participant.id, 'test');
-  const source = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: true } } } });
+  const source = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: { include: { milestones: { where: { active: true }, orderBy: { sortOrder: 'asc' } } } } } } } });
   assert.equal(source.participantMission?.id, assignment.id);
   const { buildStaticInviteDto } = await import('../src/lib/public-invite');
   const publicInvite = buildStaticInviteDto({ ...source, published: true }, 'certifydcreator@gmail.com');
@@ -156,7 +156,7 @@ test('Mission 03 invite is public-start enabled and renders an actionable setup 
 
   const { invite } = await service.generateInvite(participant.id, 'test', setupAssignment.id);
   await service.publishInvite(invite.id, 'test');
-  const source = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: true } } } });
+  const source = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { participant: true, participantMission: { include: { mission: { include: { milestones: { where: { active: true }, orderBy: { sortOrder: 'asc' } } } } } } } });
   const { buildStaticInviteDto, buildStaticMissionStartDto } = await import('../src/lib/public-invite');
   const { renderPublicInvite, renderMissionStart } = await import('../src/lib/public-invite-renderer');
   const dto = buildStaticInviteDto(source, 'certifydcreator@gmail.com');
@@ -175,12 +175,25 @@ test('Mission 03 invite is public-start enabled and renders an actionable setup 
   assert.equal(start.choices.length, 1);
   assert.equal(start.choices[0].label, 'Watch the setup walkthrough');
   assert.equal(start.choices[0].href, 'https://youtu.be/aqLdPcvvf6k?si=KFRvWOz5O8JgUUa4');
+  assert.deepEqual(start.steps, [
+    'Identity/profile established',
+    'Required local services verified',
+    'Commerce configuration reviewed',
+    'Local Core configuration verified',
+    'Core ready to connect publicly',
+  ]);
   assert.equal(start.aiPrompt, '');
   assert.equal(start.repositoryUrl, null);
   const startHtml = renderMissionStart(start);
   assert.match(startHtml, /Watch the setup walkthrough/);
   assert.match(startHtml, /Open Setup Video/);
   assert.match(startHtml, /https:\/\/youtu\.be\/aqLdPcvvf6k\?si=KFRvWOz5O8JgUUa4/);
+  assert.match(startHtml, /Mission checklist/);
+  assert.match(startHtml, /Identity\/profile established/);
+  assert.match(startHtml, /Required local services verified/);
+  assert.match(startHtml, /Commerce configuration reviewed/);
+  assert.match(startHtml, /Local Core configuration verified/);
+  assert.match(startHtml, /Core ready to connect publicly/);
   assert.equal(startHtml.includes('AI coding agent path'), false);
   assert.equal(startHtml.includes('Copy Certifyd Setup Prompt'), false);
   assert.equal(startHtml.includes('Open Core Repository'), false);
