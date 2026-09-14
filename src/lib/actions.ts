@@ -94,6 +94,8 @@ export async function noteAction(formData: FormData) {
 export async function progressAction(formData: FormData) {
   const admin = await requireAdmin();
   await updateProgress(String(formData.get('progressId')), String(formData.get('status')) as MilestoneStatus, String(formData.get('note') || ''), admin.email);
+  revalidatePath('/admin');
+  revalidatePath('/admin/participants');
   revalidatePath(`/admin/participants/${formData.get('participantId')}`);
 }
 

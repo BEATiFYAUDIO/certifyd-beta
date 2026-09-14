@@ -334,8 +334,13 @@ export async function acceptInvite(code: string) {
 export async function updateProgress(progressId: string, status: MilestoneStatus, note: string, actor = 'admin') {
   const safeProgressId = idSchema.parse(progressId);
   const safeStatus = milestoneStatusSchema.parse(status);
-  const completedAt = safeStatus === MilestoneStatus.COMPLETE ? new Date() : null;
-  const progress = await prisma.participantMissionProgress.update({ where: { id: safeProgressId }, include: { participantMission: true }, data: { status: safeStatus, note: progressNoteSchema.parse(note || ''), completedAt } });
+  const now = new Date();
+  const completedAt = safeStatus === MilestoneStatus.COMPLETE ? now : null;
+  const progress = await prisma.$transaction(async (tx) => {
+    const updated = await tx.participantMissionProgress.update({ where: { id: safeProgressId }, include: { participantMission: true }, data: { status: safeStatus, note: progressNoteSchema.parse(note || ''), completedAt } });
+    await tx.participant.update({ where: { id: updated.participantMission.participantId }, data: { updatedAt: now } });
+    return updated;
+  });
   await audit(actor, 'participant.progress.updated', progress.participantMission.participantId, { progressId: safeProgressId, participantMissionId: progress.participantMissionId, status: safeStatus });
   return progress;
 }

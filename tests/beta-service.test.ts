@@ -397,13 +397,17 @@ test('milestones, assignment founder notes and downstream network origin are pre
   assert.equal(artist.networkOriginParticipantId, teddy.id);
 
   const progress = await prisma.participantMissionProgress.findFirstOrThrow({ where: { participantMissionId: assignment.id, milestoneId: milestone.id } });
+  const beforeProgressUpdate = await prisma.participant.findUniqueOrThrow({ where: { id: teddy.id } });
+  await new Promise((resolve) => setTimeout(resolve, 5));
   await service.updateProgress(progress.id, MilestoneStatus.COMPLETE, 'Installed with Codex.');
   await service.addFounderNote(teddy.id, { body: 'Did not understand the node concept without explanation.', participantMissionId: assignment.id });
 
   const note = await prisma.founderNote.findFirstOrThrow({ where: { participantId: teddy.id } });
+  const afterProgressUpdate = await prisma.participant.findUniqueOrThrow({ where: { id: teddy.id } });
   const updatedProgress = await prisma.participantMissionProgress.findUniqueOrThrow({ where: { id: progress.id } });
   assert.match(note.body, /node concept/);
   assert.equal(note.participantMissionId, assignment.id);
+  assert.ok(afterProgressUpdate.updatedAt > beforeProgressUpdate.updatedAt);
   assert.equal(updatedProgress.status, MilestoneStatus.COMPLETE);
   assert.ok(updatedProgress.completedAt);
 
